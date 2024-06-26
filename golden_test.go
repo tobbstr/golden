@@ -8,6 +8,10 @@ import (
 )
 
 func TestJSON(t *testing.T) {
+	// Save the original value of the update flag, since this test modifies it and if we don't restore it,
+	// it will affect other tests.
+	originalUpdate := update
+
 	type args struct {
 		t          *testing.T
 		want       string
@@ -165,6 +169,8 @@ func TestJSON(t *testing.T) {
 			}
 		})
 	}
+
+	update = originalUpdate // Restore the original value of the update flag
 }
 
 func readFile(t *testing.T, path string) []byte {
