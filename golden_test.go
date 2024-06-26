@@ -167,6 +167,13 @@ func TestJSON(t *testing.T) {
 	}
 }
 
+func TestJSON_duplicateWrites(t *testing.T) {
+	/* ---------------------------------- Given --------------------------------- */
+	want := "testdata/json/duplicate_writes.json"
+	JSON(t, want, map[string]interface{}{"name": "John", "age": 30})
+	JSON(t, want, map[string]interface{}{"name": "John", "age": 30})
+}
+
 func readFile(t *testing.T, path string) []byte {
 	t.Helper()
 	b, err := os.ReadFile(path)
