@@ -26,7 +26,6 @@ func JSON(t *testing.T, want string, got any, skipFields ...string) {
 		require.NoError(t, err, "skipping field = %s", field)
 	}
 
-	t.Logf("update is %#v", *update)
 	if update != nil && *update {
 		writeGoldenFile(t, want, gotBytes)
 		return
@@ -42,7 +41,7 @@ func writeGoldenFile(t *testing.T, want string, got []byte) {
 	t.Helper()
 	// check for duplicate writes
 	if _, written := fileWritten[want]; written {
-		t.Fatalf("writing golden file: attempting to write to the same file twice")
+		t.Fatalf("writing golden file = %s: attempting to write to the same file twice", want)
 		return
 	}
 

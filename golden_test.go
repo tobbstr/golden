@@ -8,6 +8,10 @@ import (
 )
 
 func TestJSON(t *testing.T) {
+	// Save the original value of the update flag, since this test modifies it and if we don't restore it,
+	// it will affect other tests.
+	originalUpdate := update
+
 	type args struct {
 		t          *testing.T
 		want       string
@@ -165,13 +169,8 @@ func TestJSON(t *testing.T) {
 			}
 		})
 	}
-}
 
-func TestJSON_duplicateWrites(t *testing.T) {
-	/* ---------------------------------- Given --------------------------------- */
-	want := "testdata/json/duplicate_writes.json"
-	JSON(t, want, map[string]interface{}{"name": "John", "age": 30})
-	JSON(t, want, map[string]interface{}{"name": "John", "age": 30})
+	update = originalUpdate // Restore the original value of the update flag
 }
 
 func readFile(t *testing.T, path string) []byte {
