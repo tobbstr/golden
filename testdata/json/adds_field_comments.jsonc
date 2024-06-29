@@ -1,0 +1,8 @@
+{
+    "age": 30,
+    "colour": {
+        "eyes": "brown", // Should be brown
+        "hair": "black" // Should be black. Since lorem ipsum dolor sit amet, consectetur adipiscing elit.
+    },
+    "name": "John"
+}

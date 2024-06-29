@@ -1,0 +1,12 @@
+/*
+This is a file comment
+*/
+
+{
+    "age": 30,
+    "colour": {
+        "eyes": "brown",
+        "hair": "black"
+    },
+    "name": "John"
+}
