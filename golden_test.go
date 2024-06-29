@@ -13,10 +13,10 @@ func TestJSON(t *testing.T) {
 	originalUpdate := update
 
 	type args struct {
-		t          *testing.T
-		want       string
-		got        any
-		skipFields []string
+		t       *testing.T
+		want    string
+		got     any
+		options []Option
 	}
 	type given struct {
 		args args
@@ -28,8 +28,8 @@ func TestJSON(t *testing.T) {
 		json string
 		// goldenFileUpdated is true when the golden file should be updated in the test case
 		goldenFileUpdated bool
-		// failed is true when the test case should fail
-		failed bool
+		// failure is true when the test case should fail
+		failure bool
 	}
 	type test struct {
 		name  string
@@ -87,7 +87,7 @@ func TestJSON(t *testing.T) {
 							"eyes": "brown",
 						},
 					},
-					skipFields: []string{"colour.hair", "colour.eyes"},
+					options: []Option{SkippedFields("colour.hair", "colour.eyes")},
 				},
 				update: false,
 			},
@@ -130,7 +130,75 @@ func TestJSON(t *testing.T) {
     "name": "John"
 }`,
 				goldenFileUpdated: false,
-				failed:            true,
+				failure:           true,
+			},
+		},
+		{
+			name: "adds field comments",
+			given: given{
+				args: args{
+					t:    &testing.T{},
+					want: "testdata/json/adds_field_comments.jsonc",
+					got: map[string]interface{}{
+						"name": "John",
+						"age":  30,
+						"colour": map[string]interface{}{
+							"hair": "black",
+							"eyes": "brown",
+						},
+					},
+					options: []Option{FieldComments(
+						FieldComment{Path: "colour.hair", Comment: "Should be black. Since lorem ipsum dolor sit amet, consectetur adipiscing elit."},
+						FieldComment{Path: "colour.eyes", Comment: "Should be brown"},
+					)},
+				},
+				update: false,
+			},
+			want: want{
+				json: `{
+    "age": 30,
+    "colour": {
+        "eyes": "brown", // Should be brown
+        "hair": "black" // Should be black. Since lorem ipsum dolor sit amet, consectetur adipiscing elit.
+    },
+    "name": "John"
+}
+`,
+				goldenFileUpdated: false,
+			},
+		},
+		{
+			name: "adds file comment",
+			given: given{
+				args: args{
+					t:    &testing.T{},
+					want: "testdata/json/adds_file_comment.jsonc",
+					got: map[string]interface{}{
+						"name": "John",
+						"age":  30,
+						"colour": map[string]interface{}{
+							"hair": "black",
+							"eyes": "brown",
+						},
+					},
+					options: []Option{FileComment("This is a file comment")},
+				},
+				update: false,
+			},
+			want: want{
+				json: `/*
+This is a file comment
+*/
+
+{
+    "age": 30,
+    "colour": {
+        "eyes": "brown",
+        "hair": "black"
+    },
+    "name": "John"
+}`,
+				goldenFileUpdated: false,
 			},
 		},
 	}
@@ -146,7 +214,7 @@ func TestJSON(t *testing.T) {
 			}
 
 			/* ---------------------------------- When ---------------------------------- */
-			JSON(tt.given.args.t, tt.given.args.want, tt.given.args.got, tt.given.args.skipFields...)
+			JSON(tt.given.args.t, tt.given.args.want, tt.given.args.got, tt.given.args.options...)
 
 			/* ---------------------------------- Then ---------------------------------- */
 			// Read the golden file
@@ -156,7 +224,7 @@ func TestJSON(t *testing.T) {
 				require.NotEqual(t, initialGoldenFile, got, "golden file should be updated")
 			}
 
-			if tt.want.failed {
+			if tt.want.failure {
 				// Compare the golden file with the expected JSON
 				require.NotEqual(t, tt.want.json, string(got), "comparison with golden file failed")
 				// Check that the test failed
