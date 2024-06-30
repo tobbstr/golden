@@ -14,15 +14,24 @@ import (
 	"github.com/tidwall/sjson"
 )
 
+// update is a flag that is used to update the golden test files. If the flag is set to true, the golden test files
+// will be updated with the new test results.
+//
+//	Example:
+//	 * To set the flag to true, run 'go test -update'
+//	 * Example: To set the flag to false, run 'go test'
 var update = flag.Bool("update", false, "Update golden test file")
 
+// fileWritten keeps track of the files that have been written to. This is to prevent writing to the same file twice.
 var fileWritten = make(map[string]struct{})
 
+// golden is a model of the golden file.
 type golden struct {
-	got    any
 	result []byte
 }
 
+// Option is a function that modifies the golden file. It is used to apply modifications to the golden file before
+// comparing it with the actual result.
 type Option func(*testing.T, *golden)
 
 // SkippedFields replaces the value of the fields with "--* SKIPPED *--".
@@ -41,13 +50,14 @@ func SkippedFields(fields ...string) Option {
 	return func(t *testing.T, g *golden) {
 		var err error
 		for _, field := range fields {
-			// g.result, err = sjson.SetRawBytes(g.result, field, []byte(`"--* SKIPPED *--" // SKIPPED`))
 			g.result, err = sjson.SetBytes(g.result, field, "--* SKIPPED *--")
 			require.NoError(t, err, "skipping field = %s", field)
 		}
 	}
 }
 
+// FieldComment is a comment that describes what to look for when inspecting the JSON field. The comment is added to
+// the field specified by its Path.
 type FieldComment struct {
 	// Path is the GJSON path to the field.
 	// See https://github.com/tidwall/gjson/blob/master/SYNTAX.md
@@ -151,13 +161,15 @@ func FileComment(comment string) Option {
 	}
 }
 
+// JSON compares the expected JSON (want) with the actual JSON (got). The expected JSON is read from a golden file.
+// To update the golden file, set the update flag to true.
 func JSON(t *testing.T, want string, got any, opts ...Option) {
 	t.Helper()
 	var gotBytes []byte
 	gotBytes, err := json.MarshalIndent(got, "", "    ")
 	require.NoError(t, err, "marshalling got")
 
-	g := &golden{got: got, result: gotBytes}
+	g := &golden{result: gotBytes}
 	for _, applyOn := range opts {
 		applyOn(t, g)
 	}
