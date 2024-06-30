@@ -236,6 +236,7 @@ This is a file comment
 				require.False(t, tt.given.args.t.Failed(), "test failed")
 			}
 		})
+		JSON(t, "want", "got", FieldComments([]FieldComment{{Path: "path", Comment: "comment"}}...))
 	}
 
 	update = originalUpdate // Restore the original value of the update flag
