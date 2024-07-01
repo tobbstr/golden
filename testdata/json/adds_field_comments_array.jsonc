@@ -1,0 +1,12 @@
+{
+    "age": 30,
+    "colour": [
+        {
+            "hair": "black"
+        },
+        {
+            "hair": "brown" // Should be brown
+        }
+    ],
+    "name": "John"
+}

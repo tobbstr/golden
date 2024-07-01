@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -32,27 +34,149 @@ type golden struct {
 
 // Option is a function that modifies the golden file. It is used to apply modifications to the golden file before
 // comparing it with the actual result.
-type Option func(*testing.T, *golden)
+type Option func(*testing.T, *golden, any)
 
 // SkippedFields replaces the value of the fields with "--* SKIPPED *--".
 // The fields are specified by their JSON path.
 //
-// Example: "data.user.name" for the following JSON:
+// Example: "data.user.Name" for the following JSON:
 //
 //	{
 //	    "data": {
 //	        "user": {
-//	            "name": "--* SKIPPED *--",
+//	            "Name": "--* SKIPPED *--",
 //	        }
 //	    }
 //	}
 func SkippedFields(fields ...string) Option {
-	return func(t *testing.T, g *golden) {
-		var err error
-		for _, field := range fields {
-			g.result, err = sjson.SetBytes(g.result, field, "--* SKIPPED *--")
-			require.NoError(t, err, "skipping field = %s", field)
+	return func(t *testing.T, g *golden, got any) {
+		// prefix the fields with a dot to simplify comparisons later on
+		for i, field := range fields {
+			fields[i] = "." + field
 		}
+
+		walkGotValueForSkippingFields(t, g, got, "", fields)
+		// for _, field := range fields {
+		// 	g.result = markFieldAsSkipped(t, g.result, field)
+		// }
+	}
+}
+
+func markFieldAsSkipped(t *testing.T, json []byte, fieldPath string) []byte {
+	var err error
+	json, err = sjson.SetBytes(json, fieldPath, "--* SKIPPED *--")
+	require.NoError(t, err, "skipping field = %s", fieldPath)
+	return json
+}
+
+// walkGotValueForSkippingFields walks the got value and marks the fields that are to be skipped. The fields are
+// specified by their GJSON path.
+func walkGotValueForSkippingFields(t *testing.T, g *golden, next any, currentPath string, fields []string) {
+	value := reflect.ValueOf(next)
+
+	switch value.Kind() {
+	case reflect.Struct:
+		for i := 0; i < value.NumField(); i++ {
+			field := value.Field(i)
+			var fieldName string
+			fieldTag := value.Type().Field(i).Tag.Get("json")
+			if fieldTag != "" {
+				fieldName = fieldTag
+			} else {
+				fieldName = value.Type().Field(i).Name
+			}
+			fieldPath := currentPath + "." + fieldName
+
+			// Return early if the field is not in the fields list
+			proceed := false
+			onlyPrefixFound := true
+			for _, fld := range fields {
+				if strings.HasPrefix(fld, fieldPath) {
+					proceed = true
+					if fieldPath == fld {
+						onlyPrefixFound = false
+					}
+					break
+				}
+			}
+			if !proceed {
+				continue
+			}
+			if onlyPrefixFound {
+				walkGotValueForSkippingFields(t, g, field.Interface(), fieldPath, fields)
+				return
+			}
+
+			// If the field is nilable and is nil, then skip marking it as skipped since its value will be
+			// deterministic.
+			switch field.Kind() {
+			case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+				if field.IsNil() {
+					continue
+				}
+			}
+			// Otherwise, mark the field as skipped
+			g.result = markFieldAsSkipped(t, g.result, fieldPath[1:]) // remove the leading dot
+		}
+	case reflect.Map:
+		// Return early if the map key type is not string, since we cannot build a path with a non-string key.
+		keyType := value.Type().Key()
+		if keyType.Kind() != reflect.String {
+			return
+		}
+
+		var fieldPath string
+		for _, key := range value.MapKeys() {
+			proceed := false
+			onlyPrefixFound := true
+			fieldPath = currentPath + "." + key.String()
+			for _, fld := range fields {
+				if strings.HasPrefix(fld, fieldPath) {
+					proceed = true
+					if fieldPath == fld {
+						onlyPrefixFound = false
+					}
+					break
+				}
+			}
+			if !proceed {
+				continue
+			}
+			keyValue := value.MapIndex(key)
+			if onlyPrefixFound {
+				walkGotValueForSkippingFields(t, g, keyValue.Interface(), fieldPath, fields)
+				return
+			}
+
+			// If the field is nilable and is nil, then skip marking it as skipped since its value will be
+			// deterministic.
+			switch keyValue.Kind() {
+			case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+				if keyValue.IsNil() {
+					continue
+				}
+			}
+			// Otherwise, mark the field as skipped
+			g.result = markFieldAsSkipped(t, g.result, fieldPath[1:]) // remove the leading dot
+		}
+	case reflect.Slice:
+		for i := 0; i < value.Len(); i++ {
+			elem := value.Index(i)
+			var fieldPath string
+			if currentPath == "" {
+				fieldPath = strconv.Itoa(i)
+			} else {
+				fieldPath = currentPath + "." + strconv.Itoa(i)
+			}
+			walkGotValueForSkippingFields(t, g, elem.Interface(), fieldPath, fields)
+		}
+	case reflect.Array:
+		for i := 0; i < value.Len(); i++ {
+			elem := value.Index(i)
+			fieldPath := currentPath + "." + strconv.Itoa(i)
+			walkGotValueForSkippingFields(t, g, elem.Interface(), fieldPath, fields)
+		}
+	default:
 	}
 }
 
@@ -88,7 +212,7 @@ type FieldComment struct {
 // i.e., for it not to show errors, make the file extension .jsonc. To do that, make sure the "want" file argument
 // in the JSON() function call has the .jsonc extension.
 func FieldComments(fieldComments ...FieldComment) Option {
-	return func(t *testing.T, g *golden) {
+	return func(t *testing.T, g *golden, _ any) {
 		// Add the comments to the fields
 		var err error
 		for _, fieldComment := range fieldComments {
@@ -156,7 +280,7 @@ func correctMisplacedCommas(input []byte) ([]byte, error) {
 // i.e., for it not to show errors, make the file extension .jsonc. To do that, make sure the "want" file argument
 // in the JSON() function call has the .jsonc extension.
 func FileComment(comment string) Option {
-	return func(t *testing.T, g *golden) {
+	return func(t *testing.T, g *golden, _ any) {
 		g.result = append([]byte("/*\n"+comment+"\n*/\n\n"), g.result...)
 	}
 }
@@ -171,7 +295,7 @@ func JSON(t *testing.T, want string, got any, opts ...Option) {
 
 	g := &golden{result: gotBytes}
 	for _, applyOn := range opts {
-		applyOn(t, g)
+		applyOn(t, g, got)
 	}
 
 	if update != nil && *update {

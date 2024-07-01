@@ -1,0 +1,16 @@
+{
+    "name": "John",
+    "age": 30,
+    "siblings": [
+        {
+            "hair": {
+                "colour": "black"
+            }
+        },
+        {
+            "hair": {
+                "colour": "--* SKIPPED *--"
+            }
+        }
+    ]
+}
