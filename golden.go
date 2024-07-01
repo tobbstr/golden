@@ -37,7 +37,13 @@ type golden struct {
 type Option func(*testing.T, *golden, any)
 
 // SkippedFields replaces the value of the fields with "--* SKIPPED *--".
-// The fields are specified by their JSON path.
+// The fields are specified by their GJSON path.
+// See https://github.com/tidwall/gjson/blob/master/SYNTAX.md
+//
+// The rules are as follows:
+//   - If the field is a nilable type and is nil, then it is not marked as skipped, since its "null" value is already deterministic.
+//   - If the field is a nilable type and has a non-nil value, then it is marked as skipped.
+//   - If the field is a non-nilable type, then it is marked as skipped.
 //
 // Example: "data.user.Name" for the following JSON:
 //
@@ -56,9 +62,6 @@ func SkippedFields(fields ...string) Option {
 		}
 
 		walkGotValueForSkippingFields(t, g, got, "", fields)
-		// for _, field := range fields {
-		// 	g.result = markFieldAsSkipped(t, g.result, field)
-		// }
 	}
 }
 
@@ -87,36 +90,9 @@ func walkGotValueForSkippingFields(t *testing.T, g *golden, next any, currentPat
 			}
 			fieldPath := currentPath + "." + fieldName
 
-			// Return early if the field is not in the fields list
-			proceed := false
-			onlyPrefixFound := true
-			for _, fld := range fields {
-				if strings.HasPrefix(fld, fieldPath) {
-					proceed = true
-					if fieldPath == fld {
-						onlyPrefixFound = false
-					}
-					break
-				}
-			}
-			if !proceed {
-				continue
-			}
-			if onlyPrefixFound {
-				walkGotValueForSkippingFields(t, g, field.Interface(), fieldPath, fields)
+			if shouldReturn := processFieldPath(t, g, field, fieldPath, fields); shouldReturn {
 				return
 			}
-
-			// If the field is nilable and is nil, then skip marking it as skipped since its value will be
-			// deterministic.
-			switch field.Kind() {
-			case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
-				if field.IsNil() {
-					continue
-				}
-			}
-			// Otherwise, mark the field as skipped
-			g.result = markFieldAsSkipped(t, g.result, fieldPath[1:]) // remove the leading dot
 		}
 	case reflect.Map:
 		// Return early if the map key type is not string, since we cannot build a path with a non-string key.
@@ -127,37 +103,10 @@ func walkGotValueForSkippingFields(t *testing.T, g *golden, next any, currentPat
 
 		var fieldPath string
 		for _, key := range value.MapKeys() {
-			proceed := false
-			onlyPrefixFound := true
 			fieldPath = currentPath + "." + key.String()
-			for _, fld := range fields {
-				if strings.HasPrefix(fld, fieldPath) {
-					proceed = true
-					if fieldPath == fld {
-						onlyPrefixFound = false
-					}
-					break
-				}
-			}
-			if !proceed {
-				continue
-			}
-			keyValue := value.MapIndex(key)
-			if onlyPrefixFound {
-				walkGotValueForSkippingFields(t, g, keyValue.Interface(), fieldPath, fields)
+			if shouldReturn := processFieldPath(t, g, value.MapIndex(key), fieldPath, fields); shouldReturn {
 				return
 			}
-
-			// If the field is nilable and is nil, then skip marking it as skipped since its value will be
-			// deterministic.
-			switch keyValue.Kind() {
-			case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
-				if keyValue.IsNil() {
-					continue
-				}
-			}
-			// Otherwise, mark the field as skipped
-			g.result = markFieldAsSkipped(t, g.result, fieldPath[1:]) // remove the leading dot
 		}
 	case reflect.Slice:
 		for i := 0; i < value.Len(); i++ {
@@ -178,6 +127,41 @@ func walkGotValueForSkippingFields(t *testing.T, g *golden, next any, currentPat
 		}
 	default:
 	}
+}
+
+func processFieldPath(t *testing.T, g *golden, field reflect.Value, fieldPath string, fields []string) bool {
+	proceed := false
+	onlyPrefixFound := true
+	for _, fld := range fields {
+		if strings.HasPrefix(fld, fieldPath) {
+			proceed = true
+			if fieldPath == fld {
+				onlyPrefixFound = false
+			}
+			break
+		}
+	}
+	// Return early if the field is not in the fields list
+	if !proceed {
+		return false
+	}
+	// Keep walking if only a partial field path is found
+	if onlyPrefixFound {
+		walkGotValueForSkippingFields(t, g, field.Interface(), fieldPath, fields)
+		return true
+	}
+
+	// If the field is nilable and is nil, then skip marking it as skipped since its value will be
+	// deterministic.
+	switch field.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		if field.IsNil() {
+			return false
+		}
+	}
+	// Otherwise, mark the field as skipped
+	g.result = markFieldAsSkipped(t, g.result, fieldPath[1:]) // remove the leading dot
+	return false
 }
 
 // FieldComment is a comment that describes what to look for when inspecting the JSON field. The comment is added to
