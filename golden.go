@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -32,28 +34,134 @@ type golden struct {
 
 // Option is a function that modifies the golden file. It is used to apply modifications to the golden file before
 // comparing it with the actual result.
-type Option func(*testing.T, *golden)
+type Option func(*testing.T, *golden, any)
 
 // SkippedFields replaces the value of the fields with "--* SKIPPED *--".
-// The fields are specified by their JSON path.
+// The fields are specified by their GJSON path.
+// See https://github.com/tidwall/gjson/blob/master/SYNTAX.md
 //
-// Example: "data.user.name" for the following JSON:
+// The rules are as follows:
+//   - If the field is a nilable type and is nil, then it is not marked as skipped, since its "null" value is already deterministic.
+//   - If the field is a nilable type and has a non-nil value, then it is marked as skipped.
+//   - If the field is a non-nilable type, then it is marked as skipped.
+//
+// Example: "data.user.Name" for the following JSON:
 //
 //	{
 //	    "data": {
 //	        "user": {
-//	            "name": "--* SKIPPED *--",
+//	            "Name": "--* SKIPPED *--",
 //	        }
 //	    }
 //	}
 func SkippedFields(fields ...string) Option {
-	return func(t *testing.T, g *golden) {
-		var err error
-		for _, field := range fields {
-			g.result, err = sjson.SetBytes(g.result, field, "--* SKIPPED *--")
-			require.NoError(t, err, "skipping field = %s", field)
+	return func(t *testing.T, g *golden, got any) {
+		// prefix the fields with a dot to simplify comparisons later on
+		for i, field := range fields {
+			fields[i] = "." + field
+		}
+
+		walkGotValueForSkippingFields(t, g, got, "", fields)
+	}
+}
+
+func markFieldAsSkipped(t *testing.T, json []byte, fieldPath string) []byte {
+	var err error
+	json, err = sjson.SetBytes(json, fieldPath, "--* SKIPPED *--")
+	require.NoError(t, err, "skipping field = %s", fieldPath)
+	return json
+}
+
+// walkGotValueForSkippingFields walks the got value and marks the fields that are to be skipped. The fields are
+// specified by their GJSON path.
+func walkGotValueForSkippingFields(t *testing.T, g *golden, next any, currentPath string, fields []string) {
+	value := reflect.ValueOf(next)
+
+	switch value.Kind() {
+	case reflect.Struct:
+		for i := 0; i < value.NumField(); i++ {
+			field := value.Field(i)
+			var fieldName string
+			fieldTag := value.Type().Field(i).Tag.Get("json")
+			if fieldTag != "" {
+				fieldName = fieldTag
+			} else {
+				fieldName = value.Type().Field(i).Name
+			}
+			fieldPath := currentPath + "." + fieldName
+
+			if shouldReturn := processFieldPath(t, g, field, fieldPath, fields); shouldReturn {
+				return
+			}
+		}
+	case reflect.Map:
+		// Return early if the map key type is not string, since we cannot build a path with a non-string key.
+		keyType := value.Type().Key()
+		if keyType.Kind() != reflect.String {
+			return
+		}
+
+		var fieldPath string
+		for _, key := range value.MapKeys() {
+			fieldPath = currentPath + "." + key.String()
+			if shouldReturn := processFieldPath(t, g, value.MapIndex(key), fieldPath, fields); shouldReturn {
+				return
+			}
+		}
+	case reflect.Slice:
+		for i := 0; i < value.Len(); i++ {
+			elem := value.Index(i)
+			var fieldPath string
+			if currentPath == "" {
+				fieldPath = strconv.Itoa(i)
+			} else {
+				fieldPath = currentPath + "." + strconv.Itoa(i)
+			}
+			walkGotValueForSkippingFields(t, g, elem.Interface(), fieldPath, fields)
+		}
+	case reflect.Array:
+		for i := 0; i < value.Len(); i++ {
+			elem := value.Index(i)
+			fieldPath := currentPath + "." + strconv.Itoa(i)
+			walkGotValueForSkippingFields(t, g, elem.Interface(), fieldPath, fields)
+		}
+	default:
+	}
+}
+
+func processFieldPath(t *testing.T, g *golden, field reflect.Value, fieldPath string, fields []string) bool {
+	proceed := false
+	onlyPrefixFound := true
+	for _, fld := range fields {
+		if strings.HasPrefix(fld, fieldPath) {
+			proceed = true
+			if fieldPath == fld {
+				onlyPrefixFound = false
+			}
+			break
 		}
 	}
+	// Return early if the field is not in the fields list
+	if !proceed {
+		return false
+	}
+	// Keep walking if only a partial field path is found
+	if onlyPrefixFound {
+		walkGotValueForSkippingFields(t, g, field.Interface(), fieldPath, fields)
+		return true
+	}
+
+	// If the field is nilable and is nil, then skip marking it as skipped since its value will be
+	// deterministic.
+	switch field.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		if field.IsNil() {
+			return false
+		}
+	}
+	// Otherwise, mark the field as skipped
+	g.result = markFieldAsSkipped(t, g.result, fieldPath[1:]) // remove the leading dot
+	return false
 }
 
 // FieldComment is a comment that describes what to look for when inspecting the JSON field. The comment is added to
@@ -88,7 +196,7 @@ type FieldComment struct {
 // i.e., for it not to show errors, make the file extension .jsonc. To do that, make sure the "want" file argument
 // in the JSON() function call has the .jsonc extension.
 func FieldComments(fieldComments ...FieldComment) Option {
-	return func(t *testing.T, g *golden) {
+	return func(t *testing.T, g *golden, _ any) {
 		// Add the comments to the fields
 		var err error
 		for _, fieldComment := range fieldComments {
@@ -156,7 +264,7 @@ func correctMisplacedCommas(input []byte) ([]byte, error) {
 // i.e., for it not to show errors, make the file extension .jsonc. To do that, make sure the "want" file argument
 // in the JSON() function call has the .jsonc extension.
 func FileComment(comment string) Option {
-	return func(t *testing.T, g *golden) {
+	return func(t *testing.T, g *golden, _ any) {
 		g.result = append([]byte("/*\n"+comment+"\n*/\n\n"), g.result...)
 	}
 }
@@ -171,7 +279,7 @@ func JSON(t *testing.T, want string, got any, opts ...Option) {
 
 	g := &golden{result: gotBytes}
 	for _, applyOn := range opts {
-		applyOn(t, g)
+		applyOn(t, g, got)
 	}
 
 	if update != nil && *update {
