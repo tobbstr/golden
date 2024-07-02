@@ -24,8 +24,8 @@ import (
 //	 * Example: To set the flag to false, run 'go test'
 var update = flag.Bool("update", false, "Update golden test file")
 
-// fileWritten keeps track of the files that have been written to. This is to prevent writing to the same file twice.
-var fileWritten = make(map[string]struct{})
+// filesWritten keeps track of the files that have been written to. This is to prevent writing to the same file twice.
+var filesWritten = make(map[string]struct{})
 
 // golden is a model of the golden file.
 type golden struct {
@@ -340,7 +340,7 @@ func compareJSON(t *testing.T, failNow bool, want string, got any, opts ...Optio
 func writeGoldenFile(t *testing.T, required bool, want string, got []byte) {
 	t.Helper()
 	// check for duplicate writes
-	if _, written := fileWritten[want]; written {
+	if _, written := filesWritten[want]; written {
 		if !required {
 			assert.Equal(t, false, written, "writing golden file = %s: attempting to write to the same file twice", want)
 			return
@@ -357,5 +357,5 @@ func writeGoldenFile(t *testing.T, required bool, want string, got []byte) {
 	require.NoError(t, err, "writing golden file = %s", want)
 
 	// mark the file as written
-	fileWritten[want] = struct{}{}
+	filesWritten[want] = struct{}{}
 }
