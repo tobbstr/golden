@@ -80,7 +80,7 @@ func TestGetPerson(t *testing.t) {
 
     // -------------------------------- Then ---------------------------------
     // Assert the return value
-    golden.JSON(t, want, got)
+    golden.AssertJSON(t, want, got)
 }
 ```
 
@@ -97,7 +97,7 @@ This adds a field comment.
 ```go
 // NOTE! The file extension is .jsonc, since standard JSON does not support comments.
 want := "testdata/my_golden_file.jsonc"
-golden.JSON(t, want, got, golden.FieldComments(
+golden.AssertJSON(t, want, got, golden.FieldComments(
     golden.FieldComment{Path:"data.users.0.age", Comment: "Should be 25"},
 ))
 ```
@@ -131,7 +131,7 @@ This adds a file comment.
 ```go
 // NOTE! The file extension is .jsonc, since standard JSON does not support comments.
 want := "testdata/my_golden_file.jsonc"
-golden.JSON(t, want, got, golden.FileComment("This is my file comment"))
+golden.AssertJSON(t, want, got, golden.FileComment("This is my file comment"))
 ```
 
 And this is what the resulting golden file looks like:
@@ -166,7 +166,7 @@ achieve this, do the following.
 ```go
 // NOTE! The file extension is .jsonc, since standard JSON does not support comments.
 want := "testdata/my_golden_file.jsonc"
-golden.JSON(t, want, got, golden.SkippedFields("data.users.0.age", "data.users.1.age"))
+golden.AssertJSON(t, want, got, golden.SkippedFields("data.users.0.age", "data.users.1.age"))
 ```
 
 And this is what the resulting golden file looks like:

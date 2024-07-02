@@ -40,7 +40,7 @@ func TestAssertJSON_UpdateFlag(t *testing.T) {
 			name: "overwrites the golden file when update flag is set to true",
 			given: given{
 				args: args{
-					want: "testdata/json_update_flag/overwrites.json",
+					want: "testdata/assert_json_update_flag/overwrites.json",
 					got:  map[string]interface{}{"name": "John", "age": 30},
 				},
 				update: true,
@@ -117,7 +117,7 @@ func TestAssertJSON_Failure(t *testing.T) {
 			given: given{
 				t: &testing.T{},
 				args: args{
-					want: "testdata/json_failure/json_different.json",
+					want: "testdata/assert_json_failure/json_different.json",
 					got: map[string]interface{}{
 						"name": "John",
 						"age":  30,
@@ -174,7 +174,7 @@ func TestAssertJSON(t *testing.T) {
 			name: "passes when the golden file's content is equal to the got JSON",
 			given: given{
 				args: args{
-					want: "testdata/json/same_content.json",
+					want: "testdata/assert_json/same_content.json",
 					got:  map[string]interface{}{"name": "John", "age": 30},
 				},
 			},
@@ -183,7 +183,7 @@ func TestAssertJSON(t *testing.T) {
 			name: "skips fields when map",
 			given: given{
 				args: args{
-					want: "testdata/json/skips_field_map.json",
+					want: "testdata/assert_json/skips_field_map.json",
 					got: map[string]interface{}{
 						"name": "John",
 						"age":  30,
@@ -213,7 +213,7 @@ func TestAssertJSON(t *testing.T) {
 					}
 
 					return args{
-						want: "testdata/json/skips_field_struct.jsonc",
+						want: "testdata/assert_json/skips_field_struct.jsonc",
 						got: person{
 							Name: "John",
 							Age:  30,
@@ -243,7 +243,7 @@ func TestAssertJSON(t *testing.T) {
 					}
 
 					return args{
-						want: "testdata/json/skips_field_slice.jsonc",
+						want: "testdata/assert_json/skips_field_slice.jsonc",
 						got: person{
 							Name: "John",
 							Age:  30,
@@ -274,7 +274,7 @@ func TestAssertJSON(t *testing.T) {
 					}
 
 					return args{
-						want: "testdata/json/skips_field_array.jsonc",
+						want: "testdata/assert_json/skips_field_array.jsonc",
 						got: person{
 							Name: "John",
 							Age:  30,
@@ -308,7 +308,7 @@ func TestAssertJSON(t *testing.T) {
 					}
 
 					return args{
-						want: "testdata/json/skips_field_nil_pointer.jsonc",
+						want: "testdata/assert_json/skips_field_nil_pointer.jsonc",
 						got: person{
 							Name:    "John",
 							Age:     30,
@@ -337,7 +337,7 @@ func TestAssertJSON(t *testing.T) {
 					}
 
 					return args{
-						want: "testdata/json/skips_field_non-nil_pointer.jsonc",
+						want: "testdata/assert_json/skips_field_non-nil_pointer.jsonc",
 						got: person{
 							Name:    "John",
 							Age:     30,
@@ -352,7 +352,7 @@ func TestAssertJSON(t *testing.T) {
 			name: "adds field comments",
 			given: given{
 				args: args{
-					want: "testdata/json/adds_field_comments.jsonc",
+					want: "testdata/assert_json/adds_field_comments.jsonc",
 					got: map[string]interface{}{
 						"name": "John",
 						"age":  30,
@@ -372,7 +372,7 @@ func TestAssertJSON(t *testing.T) {
 			name: "adds file comment",
 			given: given{
 				args: args{
-					want: "testdata/json/adds_file_comment.jsonc",
+					want: "testdata/assert_json/adds_file_comment.jsonc",
 					got: map[string]interface{}{
 						"name": "John",
 						"age":  30,
