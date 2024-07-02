@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestJSON_UpdateFlag(t *testing.T) {
+func TestAssertJSON_UpdateFlag(t *testing.T) {
 	// Save the original value of the update flag, since this test modifies it and if we don't restore it,
 	// it will affect other tests.
 	originalUpdate := update
@@ -68,7 +68,7 @@ func TestJSON_UpdateFlag(t *testing.T) {
 			tt.given.args.t = t
 
 			/* ---------------------------------- When ---------------------------------- */
-			JSON(tt.given.args.t, tt.given.args.want, tt.given.args.got, tt.given.args.options...)
+			AssertJSON(tt.given.args.t, tt.given.args.want, tt.given.args.got, tt.given.args.options...)
 
 			/* ---------------------------------- Then ---------------------------------- */
 			// Read the golden file
@@ -95,7 +95,7 @@ func TestJSON_UpdateFlag(t *testing.T) {
 	update = originalUpdate // Restore the original value of the update flag
 }
 
-func TestJSON_Failure(t *testing.T) {
+func TestAssertJSON_Failure(t *testing.T) {
 	type args struct {
 		t       *testing.T
 		want    string
@@ -140,7 +140,7 @@ func TestJSON_Failure(t *testing.T) {
 			tt.given.args.t = tt.given.t // Needed to be able to have failing JSON comparisons without the test failing
 
 			/* ---------------------------------- When ---------------------------------- */
-			JSON(tt.given.args.t, tt.given.args.want, tt.given.args.got, tt.given.args.options...)
+			AssertJSON(tt.given.args.t, tt.given.args.want, tt.given.args.got, tt.given.args.options...)
 
 			/* ---------------------------------- Then ---------------------------------- */
 			if tt.wantFailure {
@@ -155,7 +155,7 @@ func TestJSON_Failure(t *testing.T) {
 	}
 }
 
-func TestJSON(t *testing.T) {
+func TestAssertJSON(t *testing.T) {
 	type args struct {
 		t       *testing.T
 		want    string
@@ -392,7 +392,7 @@ func TestJSON(t *testing.T) {
 			tt.given.args.t = t // Needed to be able to have failing JSON comparisons without the test failing
 
 			/* ---------------------------------- When ---------------------------------- */
-			JSON(tt.given.args.t, tt.given.args.want, tt.given.args.got, tt.given.args.options...)
+			AssertJSON(tt.given.args.t, tt.given.args.want, tt.given.args.got, tt.given.args.options...)
 		})
 	}
 }
