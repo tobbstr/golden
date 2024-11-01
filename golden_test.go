@@ -2,6 +2,7 @@ package golden
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -145,12 +146,12 @@ func TestAssertJSON_Failure(t *testing.T) {
 			/* ---------------------------------- Then ---------------------------------- */
 			if tt.wantFailure {
 				// Check that the test failed
-				require.True(t, tt.given.t.Failed(), "test failed")
+				require.True(t, tt.given.t.Failed(), "want test failed got passed")
 				return
 			}
 
 			// Check that the test passed
-			require.False(t, tt.given.t.Failed(), "test passed")
+			require.False(t, tt.given.t.Failed(), "want test passed got failed")
 		})
 	}
 }
@@ -192,7 +193,7 @@ func TestAssertJSON(t *testing.T) {
 							"eyes": "brown",
 						},
 					},
-					options: []Option{SkippedFields("colour.hair", "colour.eyes")},
+					options: []Option{SkipFields("colour.hair", "colour.eyes")},
 				},
 			},
 		},
@@ -221,7 +222,7 @@ func TestAssertJSON(t *testing.T) {
 								Hair: hair{Colour: "brown"},
 							},
 						},
-						options: []Option{SkippedFields("sibling.hair.colour")},
+						options: []Option{SkipFields("sibling.hair.colour")},
 					}
 				}(),
 			},
@@ -252,7 +253,7 @@ func TestAssertJSON(t *testing.T) {
 								{Hair: hair{Colour: "brown"}},
 							},
 						},
-						options: []Option{SkippedFields("siblings.1.hair.colour")},
+						options: []Option{SkipFields("siblings.1.hair.colour")},
 					}
 				}(),
 			},
@@ -283,7 +284,7 @@ func TestAssertJSON(t *testing.T) {
 								{Hair: hair{Colour: "brown"}},
 							},
 						},
-						options: []Option{SkippedFields("siblings.1.hair.colour")},
+						options: []Option{SkipFields("siblings.1.hair.colour")},
 					}
 				}(),
 			},
@@ -314,7 +315,7 @@ func TestAssertJSON(t *testing.T) {
 							Age:     30,
 							Sibling: nil,
 						},
-						options: []Option{SkippedFields("sibling")},
+						options: []Option{SkipFields("sibling")},
 					}
 				}(),
 			},
@@ -343,7 +344,39 @@ func TestAssertJSON(t *testing.T) {
 							Age:     30,
 							Sibling: &sibling{Hair: hair{Colour: "brown"}},
 						},
-						options: []Option{SkippedFields("sibling")},
+						options: []Option{SkipFields("sibling")},
+					}
+				}(),
+			},
+		},
+		{
+			name: "skips multiple fields",
+			given: given{
+				args: func() args {
+					type hair struct {
+						Colour string `json:"colour"`
+					}
+					type sibling struct {
+						Hair hair      `json:"hair"`
+						Born time.Time `json:"born"`
+					}
+					type person struct {
+						Name     string    `json:"name"`
+						Age      int       `json:"age"`
+						Siblings []sibling `json:"siblings"`
+					}
+
+					return args{
+						want: "testdata/assert_json/skips_multiple_fields.json",
+						got: person{
+							Name: "John",
+							Age:  30,
+							Siblings: []sibling{
+								{Hair: hair{Colour: "brown"}, Born: time.Now().Add(-5 * time.Minute)},
+								{Hair: hair{Colour: "blonde"}, Born: time.Now()},
+							},
+						},
+						options: []Option{SkipFields("siblings.#.born")},
 					}
 				}(),
 			},
