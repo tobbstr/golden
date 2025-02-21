@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,7 +24,7 @@ import (
 var update = flag.Bool("update", false, "Update golden test file")
 
 // filesWritten keeps track of the files that have been written to. This is to prevent writing to the same file twice.
-var filesWritten = make(map[string]struct{})
+var filesWritten sync.Map
 
 // golden is a model of the golden file.
 type golden struct {
@@ -32,18 +33,82 @@ type golden struct {
 
 // Option is a function that modifies the golden file. It is used to apply modifications to the golden file before
 // comparing it with the actual result.
-type Option func(*testing.T, bool, *golden, any)
+//
+// Parameters:
+//   - t: the testing.T value.
+//   - failNow: if true, if any errors happen the test is marked as failed and stops execution. Otherwise, the test is
+//     marked as failed, but execution continues.
+//   - g: a wrapper around the resulting golden file.
+//   - path: the path to the golden file.
+type Option func(t *testing.T, failNow bool, g *golden, path string)
 
-// SkipFields replaces the value of the fields with "--* SKIPPED *--".
+// KeepNull overrides the SkipFields' default behaviour for a specific field. It is used when the caller wants to
+// distinguish between a non-null value and a null value, which would otherwise be replaced with "--* SKIPPED *--".
+// With the SkipFields default behaviour the fields are always replaced with skipped, but in some cases it is
+// desirable to be able to distinguish whether a field had a null value or not, while not caring what the actual value
+// was. An example of this, is an optional field such as an updatedAt timestamp and the caller simply wants to know
+// whether it was set or not.
+//
+// The rules for replacing a field's value are as follows:
+//   - If the field's JSON-value is null, then it is left untouched.
+//   - If the field's JSON-value is not null, then it is replaced with skipped.
+//
+// Example: homePhone field is of a nilable Go-type and has the JSON-value null
+//
+// Before calling SkipFields() the JSON is:
+//
+//	{
+//	    "data": {
+//	        "user": {
+//	            "homePhone": null,
+//	        }
+//	    }
+//	}
+//
+// After calling SkipFields(KeepNull("data.user.homePhone")) the JSON is still the same since the value of homePhone was null:
+//
+//	{
+//	    "data": {
+//	        "user": {
+//	            "homePhone": null,
+//	        }
+//	    }
+//	}
+//
+// NOTE! Had it not been null, it would have been replaced with "--* SKIPPED *--".
+//
+// ---
+//
+// === WILDCARD SUPPORT ===
+//
+// GJSON paths with wildcards are currently not supported!!! This option may only be used on individual fields.
+//
+// The GJSON library does not support expanding wildcard patterns like
+// `"data.users.#.cousings.#.name"“` into an array of matching paths, even though
+// similar functionality exists. This limitation applies specifically
+// to complex paths. As a result, the KeepNull option is only supported for individual fields.
+type KeepNull string
+
+// SkipFields replaces values of the fields with "--* SKIPPED *--".
 // The fields are specified by their GJSON path.
 // See https://github.com/tidwall/gjson/blob/master/SYNTAX.md
 //
-// The rules are as follows:
-//   - If the field is a nilable type and is nil, then it is not marked as skipped, since its "null" value is already deterministic.
-//   - If the field is a nilable type and has a non-nil value, then it is marked as skipped.
-//   - If the field is a non-nilable type, then it is marked as skipped.
+// It accepts either strings or KeepNulls. For strings the values are always replaced by "--* SKIPPED *--".
+// For KeepNulls, see the KeepNull definition for details.
 //
-// Example: "data.user.Name" for the following JSON:
+// Example: Replacing the value of the "Name" field with "--* SKIPPED *--"
+//
+// Before calling SkipFields("data.user.Name") the JSON is:
+//
+//	{
+//	    "data": {
+//	        "user": {
+//	            "Name": "John",
+//	        }
+//	    }
+//	}
+//
+// After calling SkipFields("data.user.Name") the JSON is:
 //
 //	{
 //	    "data": {
@@ -52,18 +117,35 @@ type Option func(*testing.T, bool, *golden, any)
 //	        }
 //	    }
 //	}
-func SkipFields(fields ...string) Option {
-	return func(t *testing.T, failNow bool, g *golden, got any) {
+func SkipFields[T string | KeepNull](fields ...T) Option {
+	return func(t *testing.T, failNow bool, g *golden, _ string) {
 		for _, fld := range fields {
-			gres := gjson.GetBytes(g.result, fld)
+			var path string
+			var keepNull bool
+			switch v := any(fld).(type) {
+			case KeepNull:
+				path = string(v)
+				keepNull = true
+			case string:
+				path = v
+			}
+			gres := gjson.GetBytes(g.result, path)
 			if !gres.Exists() {
+				if failNow {
+					require.Fail(t, "path not found", "path = %s", path)
+				}
+				assert.Fail(t, "path not found", "path = %s", path)
 				continue
 			}
-			if gres.Type == gjson.Null {
+			if keepNull && gres.Type == gjson.Null {
 				continue
 			}
-			res, err := sjson.SetBytes(g.result, fld, "--* SKIPPED *--")
+			res, err := sjson.SetBytes(g.result, path, "--* SKIPPED *--")
 			if err != nil {
+				if failNow {
+					require.Fail(t, "setting field value", "path = %s", path)
+				}
+				assert.Fail(t, "setting field value", "path = %s", path)
 				continue
 			}
 			g.result = res
@@ -103,12 +185,16 @@ type FieldComment struct {
 // i.e., for it not to show errors, make the file extension .jsonc. To do that, make sure the "want" file argument
 // in the JSON() function call has the .jsonc extension.
 func FieldComments(fieldComments ...FieldComment) Option {
-	return func(t *testing.T, failNow bool, g *golden, _ any) {
+	return func(t *testing.T, failNow bool, g *golden, _ string) {
 		// Add the comments to the fields
 		var err error
 		for _, fieldComment := range fieldComments {
 			value := gjson.GetBytes(g.result, fieldComment.Path)
 			if !value.Exists() {
+				if failNow {
+					require.Fail(t, "path not found", "path = %s", fieldComment.Path)
+				}
+				assert.Fail(t, "path not found", "path = %s", fieldComment.Path)
 				continue
 			}
 			g.result, err = sjson.SetRawBytes(g.result, fieldComment.Path, []byte(value.Raw+` // `+fieldComment.Comment))
@@ -179,17 +265,36 @@ func correctMisplacedCommas(input []byte) ([]byte, error) {
 // i.e., for it not to show errors, make the file extension .jsonc. To do that, make sure the "want" file argument
 // in the JSON() function call has the .jsonc extension.
 func FileComment(comment string) Option {
-	return func(t *testing.T, _ bool, g *golden, _ any) {
+	return func(t *testing.T, _ bool, g *golden, _ string) {
 		g.result = append([]byte("/*\n"+comment+"\n*/\n\n"), g.result...)
+	}
+}
+
+// UpdateGoldenFiles updates the golden files with the actual values instead of comparing with them.
+// This is useful when the actual values are correct and the golden files need to be updated.
+//
+// NOTE! This option should normally not be invoked directly. Instead, set the environment variable
+// "UPDATE_GOLDENS" to "1" to update the golden files, when running the tests.
+//
+// Example: UPDATE_GOLDENS=1 go test ./...
+func UpdateGoldenFiles() Option {
+	return func(t *testing.T, failNow bool, g *golden, path string) {
+		writeGoldenFile(t, failNow, path, g.result)
 	}
 }
 
 // AssertJSON compares the expected JSON (want) with the actual value (got), and if they are different it marks
 // the test as failed, but continues execution. The expected JSON is read from a golden file.
 //
-// To update the golden file with the actual value instead of comparing with it, set the update flag to true.
+// To update the golden file with the actual value instead of comparing with it, set the environment variable
+// "UPDATE_GOLDENS" to "1" when running the tests.
+//
+// Example: UPDATE_GOLDENS=1 go test ./...
 func AssertJSON(t *testing.T, want string, got any, opts ...Option) {
 	t.Helper()
+	if update != nil && *update {
+		opts = append(opts, UpdateGoldenFiles())
+	}
 	compareJSON(t, false, want, got, opts...)
 }
 
@@ -197,6 +302,9 @@ func AssertJSON(t *testing.T, want string, got any, opts ...Option) {
 // it marks the test as failed and stops execution.
 func RequireJSON(t *testing.T, want string, got any, opts ...Option) {
 	t.Helper()
+	if update != nil && *update {
+		opts = append(opts, UpdateGoldenFiles())
+	}
 	compareJSON(t, true, want, got, opts...)
 }
 
@@ -212,12 +320,7 @@ func compareJSON(t *testing.T, failNow bool, want string, got any, opts ...Optio
 
 	g := &golden{result: gotBytes}
 	for _, opt := range opts {
-		opt(t, failNow, g, got)
-	}
-
-	if update != nil && *update {
-		writeGoldenFile(t, failNow, want, g.result)
-		return
+		opt(t, failNow, g, want)
 	}
 
 	goldenBytes, err := os.ReadFile(want)
@@ -234,25 +337,25 @@ func compareJSON(t *testing.T, failNow bool, want string, got any, opts ...Optio
 	}
 }
 
-func writeGoldenFile(t *testing.T, required bool, want string, got []byte) {
+func writeGoldenFile(t *testing.T, required bool, path string, got []byte) {
 	t.Helper()
 	// check for duplicate writes
-	if _, written := filesWritten[want]; written {
+	if _, written := filesWritten.Load(path); written {
 		if !required {
-			assert.Equal(t, false, written, "writing golden file = %s: attempting to write to the same file twice", want)
+			assert.Equal(t, false, written, "writing golden file = %s: attempting to write to the same file twice", path)
 			return
 		}
-		require.Equal(t, false, written, "writing golden file = %s: attempting to write to the same file twice", want)
+		require.Equal(t, false, written, "writing golden file = %s: attempting to write to the same file twice", path)
 		return
 	}
 
-	err := os.WriteFile(want, got, 0644)
+	err := os.WriteFile(path, got, 0644)
 	if !required {
-		assert.NoError(t, err, "writing golden file = %s", want)
+		assert.NoError(t, err, "writing golden file = %s", path)
 		return
 	}
-	require.NoError(t, err, "writing golden file = %s", want)
+	require.NoError(t, err, "writing golden file = %s", path)
 
 	// mark the file as written
-	filesWritten[want] = struct{}{}
+	filesWritten.Store(path, struct{}{})
 }

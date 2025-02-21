@@ -8,10 +8,6 @@ import (
 )
 
 func TestAssertJSON_UpdateFlag(t *testing.T) {
-	// Save the original value of the update flag, since this test modifies it and if we don't restore it,
-	// it will affect other tests.
-	originalUpdate := update
-
 	type args struct {
 		t       *testing.T
 		want    string
@@ -54,11 +50,30 @@ func TestAssertJSON_UpdateFlag(t *testing.T) {
 				goldenFileUpdated: true,
 			},
 		},
+		{
+			name: "no-op when update flag is set to false",
+			given: given{
+				args: args{
+					want: "testdata/assert_json_update_flag/no-op.json",
+					got:  map[string]interface{}{"name": "John", "age": 30},
+				},
+				update: false,
+			},
+			want: want{
+				json: `{
+    "age": 30,
+    "name": "John"
+}`,
+				goldenFileUpdated: false,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			/* ---------------------------------- Given --------------------------------- */
-			update = &tt.given.update
+			if tt.given.update {
+				tt.given.args.options = append(tt.given.args.options, UpdateGoldenFiles())
+			}
 			initialGoldenFile := readFile(t, tt.given.args.want)
 
 			// Restore the initial golden file if it will be updated
@@ -72,7 +87,6 @@ func TestAssertJSON_UpdateFlag(t *testing.T) {
 			AssertJSON(tt.given.args.t, tt.given.args.want, tt.given.args.got, tt.given.args.options...)
 
 			/* ---------------------------------- Then ---------------------------------- */
-			// Read the golden file
 			got := readFile(t, tt.given.args.want)
 
 			if tt.want.goldenFileUpdated {
@@ -92,8 +106,6 @@ func TestAssertJSON_UpdateFlag(t *testing.T) {
 			}
 		})
 	}
-
-	update = originalUpdate // Restore the original value of the update flag
 }
 
 func TestAssertJSON_Failure(t *testing.T) {
@@ -105,18 +117,15 @@ func TestAssertJSON_Failure(t *testing.T) {
 	}
 	type given struct {
 		args args
-		t    *testing.T
 	}
 	type test struct {
-		name        string
-		given       given
-		wantFailure bool
+		name  string
+		given given
 	}
 	tests := []test{
 		{
 			name: "fails when the golden file's content is different from the got JSON",
 			given: given{
-				t: &testing.T{},
 				args: args{
 					want: "testdata/assert_json_failure/json_different.json",
 					got: map[string]interface{}{
@@ -129,7 +138,30 @@ func TestAssertJSON_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantFailure: true,
+		},
+		{
+			name: "test fails when commenting on non-existent field",
+			given: given{
+				args: args{
+					want: "testdata/assert_json_failure/empty.json",
+					got: map[string]interface{}{
+						"name": "John",
+					},
+					options: []Option{FieldComments(FieldComment{Path: "age", Comment: "This is a file comment"})},
+				},
+			},
+		},
+		{
+			name: "test fails when skipping non-existent field",
+			given: given{
+				args: args{
+					want: "testdata/assert_json_failure/empty.json",
+					got: map[string]interface{}{
+						"name": "John",
+					},
+					options: []Option{SkipFields("age")},
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -138,20 +170,14 @@ func TestAssertJSON_Failure(t *testing.T) {
 			initialGoldenFile := readFile(t, tt.given.args.want)
 			defer writeFile(t, tt.given.args.want, initialGoldenFile)
 
-			tt.given.args.t = tt.given.t // Needed to be able to have failing JSON comparisons without the test failing
+			tt.given.args.t = &testing.T{} // test result recorder
 
 			/* ---------------------------------- When ---------------------------------- */
 			AssertJSON(tt.given.args.t, tt.given.args.want, tt.given.args.got, tt.given.args.options...)
 
 			/* ---------------------------------- Then ---------------------------------- */
-			if tt.wantFailure {
-				// Check that the test failed
-				require.True(t, tt.given.t.Failed(), "want test failed got passed")
-				return
-			}
-
-			// Check that the test passed
-			require.False(t, tt.given.t.Failed(), "want test passed got failed")
+			// Assert that the test failed
+			require.True(t, tt.given.args.t.Failed(), "want test failed got passed")
 		})
 	}
 }
@@ -229,6 +255,37 @@ func TestAssertJSON(t *testing.T) {
 		},
 		{
 			name: "skips fields when slice",
+			given: given{
+				args: func() args {
+					type hair struct {
+						Colour string `json:"colour"`
+					}
+					type sibling struct {
+						Hair hair `json:"hair"`
+					}
+					type person struct {
+						Name     string    `json:"name"`
+						Age      int       `json:"age"`
+						Siblings []sibling `json:"siblings"`
+					}
+
+					return args{
+						want: "testdata/assert_json/skips_fields_slice.jsonc",
+						got: person{
+							Name: "John",
+							Age:  30,
+							Siblings: []sibling{
+								{Hair: hair{Colour: "black"}},
+								{Hair: hair{Colour: "brown"}},
+							},
+						},
+						options: []Option{SkipFields("siblings")},
+					}
+				}(),
+			},
+		},
+		{
+			name: "skips field when slice",
 			given: given{
 				args: func() args {
 					type hair struct {
@@ -350,6 +407,64 @@ func TestAssertJSON(t *testing.T) {
 			},
 		},
 		{
+			// When KeepNull is used on a nil pointer, then the expected output for that field is "null".
+			name: "keeps null when KeepNull on nil pointer",
+			given: given{
+				args: func() args {
+					type hair struct {
+						Colour string `json:"colour"`
+					}
+					type sibling struct {
+						Hair hair `json:"hair"`
+					}
+					type person struct {
+						Name    string   `json:"name"`
+						Age     int      `json:"age"`
+						Sibling *sibling `json:"sibling"`
+					}
+
+					return args{
+						want: "testdata/assert_json/skips_field_keep_null_on_nil_pointer.json",
+						got: person{
+							Name:    "John",
+							Age:     30,
+							Sibling: nil,
+						},
+						options: []Option{SkipFields(KeepNull("sibling"))},
+					}
+				}(),
+			},
+		},
+		{
+			// When KeepNull is used on a non-nil pointer, then the expected output for that field is "SKIPPED".
+			name: "skips field when KeepNull on non-nil pointer",
+			given: given{
+				args: func() args {
+					type hair struct {
+						Colour string `json:"colour"`
+					}
+					type sibling struct {
+						Hair hair `json:"hair"`
+					}
+					type person struct {
+						Name    string   `json:"name"`
+						Age     int      `json:"age"`
+						Sibling *sibling `json:"sibling"`
+					}
+
+					return args{
+						want: "testdata/assert_json/skips_field_keep_null_on_non-nil_pointer.json",
+						got: person{
+							Name:    "John",
+							Age:     30,
+							Sibling: &sibling{Hair: hair{Colour: "brown"}},
+						},
+						options: []Option{SkipFields(KeepNull("sibling"))},
+					}
+				}(),
+			},
+		},
+		{
 			name: "skips multiple fields",
 			given: given{
 				args: func() args {
@@ -377,6 +492,40 @@ func TestAssertJSON(t *testing.T) {
 							},
 						},
 						options: []Option{SkipFields("siblings.#.born")},
+					}
+				}(),
+			},
+		},
+		{
+			name: "skips one and keeps null in another field when multi-selecting fields",
+			given: given{
+				args: func() args {
+					type hair struct {
+						Colour string `json:"colour"`
+					}
+					type sibling struct {
+						Hair hair       `json:"hair"`
+						Born *time.Time `json:"born"`
+					}
+					type person struct {
+						Name     string    `json:"name"`
+						Age      int       `json:"age"`
+						Siblings []sibling `json:"siblings"`
+					}
+
+					now := time.Now()
+
+					return args{
+						want: "testdata/assert_json/skips_multiple_fields_keeps_one.json",
+						got: person{
+							Name: "John",
+							Age:  30,
+							Siblings: []sibling{
+								{Hair: hair{Colour: "brown"}, Born: nil},
+								{Hair: hair{Colour: "blonde"}, Born: &now},
+							},
+						},
+						options: []Option{SkipFields(KeepNull("siblings.#.born"))},
 					}
 				}(),
 			},
@@ -422,10 +571,13 @@ func TestAssertJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			/* ---------------------------------- Given --------------------------------- */
-			tt.given.args.t = t // Needed to be able to have failing JSON comparisons without the test failing
+			tt.given.args.t = &testing.T{} // test result recorder
 
 			/* ---------------------------------- When ---------------------------------- */
 			AssertJSON(tt.given.args.t, tt.given.args.want, tt.given.args.got, tt.given.args.options...)
+
+			/* ---------------------------------- Then ---------------------------------- */
+			require.False(t, tt.given.args.t.Failed()) // All test cases should pass, failures are tested in TestAssertJSON_Failure
 		})
 	}
 }
