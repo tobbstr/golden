@@ -184,7 +184,7 @@ type FieldComment struct {
 // NOTE! Adding comments to JSON makes it invalid, since JSON does not support comments. To keep you IDE happy,
 // i.e., for it not to show errors, make the file extension .jsonc. To do that, make sure the "want" file argument
 // in the JSON() function call has the .jsonc extension.
-func FieldComments(fieldComments ...FieldComment) Option {
+func FieldComments(fieldComments []FieldComment) Option {
 	return func(t *testing.T, failNow bool, g *golden, _ string) {
 		// Add the comments to the fields
 		var err error

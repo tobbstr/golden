@@ -97,9 +97,10 @@ This adds a field comment.
 ```go
 // NOTE! The file extension is .jsonc, since standard JSON does not support comments.
 want := "testdata/my_golden_file.jsonc"
-golden.AssertJSON(t, want, got, golden.FieldComments(
-    golden.FieldComment{Path:"data.users.0.age", Comment: "Should be 25"},
-))
+golden.AssertJSON(t, want, got, golden.FieldComments([]golden.FieldComment{
+    {Path:"data.users.0.age", Comment: "Should be 25"},
+    // ... add more field comments here if needed ...
+}))
 ```
 
 And this is what the resulting golden file looks like:
@@ -166,7 +167,7 @@ achieve this, do the following.
 ```go
 // NOTE! The file extension is .jsonc, since standard JSON does not support comments.
 want := "testdata/my_golden_file.jsonc"
-golden.AssertJSON(t, want, got, golden.SkippedFields("data.users.0.age", "data.users.1.age"))
+golden.AssertJSON(t, want, got, golden.SkippedFields("data.users.#.age"))
 ```
 
 And this is what the resulting golden file looks like:
@@ -187,6 +188,64 @@ And this is what the resulting golden file looks like:
     }
 }
 ```
+
+#### Keep Nulls
+
+For fields that can be `null`, you can use a special `golden.Option` to distinguish between fields that are `null`
+and those that have values.
+
+For example, consider the following JSON where the `age` field is nullable:
+
+```json
+{
+    "data": {
+        "users": [
+            {
+                "name": "John",
+                "age": 35
+            },
+            {
+                "name": "Eliana",
+                "age": null
+            }
+        ]
+    }
+}
+```
+
+Instead of replacing all values with "--* SKIPPED *--", we want to retain the "null" values and skip the non-null
+ones. For John, we skip the `age` field, but for Eliana, we keep it.
+
+Using the `KeepNull` option:
+
+```go
+golden.SkippedFields(
+    golden.KeepNull("data.users.0.age"),
+    golden.KeepNull("data.users.1.age"),
+)
+```
+
+the resulting JSON will be:
+
+```json
+{
+    "data": {
+        "users": [
+            {
+                "name": "John",
+                "age": "--* SKIPPED *--"
+            },
+            {
+                "name": "Eliana",
+                "age": null
+            }
+        ]
+    }
+}
+```
+
+**NOTE:** The `golden.KeepNull` option does not support wildcards in the GJSON path. This means it can only target
+one field at a time.
 
 ## Contributing
 
