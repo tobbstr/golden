@@ -147,7 +147,7 @@ func TestAssertJSON_Failure(t *testing.T) {
 					got: map[string]interface{}{
 						"name": "John",
 					},
-					options: []Option{FieldComments(FieldComment{Path: "age", Comment: "This is a file comment"})},
+					options: []Option{FieldComments([]FieldComment{{Path: "age", Comment: "This is a file comment"}})},
 				},
 			},
 		},
@@ -543,10 +543,10 @@ func TestAssertJSON(t *testing.T) {
 							"eyes": "brown",
 						},
 					},
-					options: []Option{FieldComments(
-						FieldComment{Path: "colour.hair", Comment: "Should be black. Since lorem ipsum dolor sit amet, consectetur adipiscing elit."},
-						FieldComment{Path: "colour.eyes", Comment: "Should be brown"},
-					)},
+					options: []Option{FieldComments([]FieldComment{
+						{Path: "colour.hair", Comment: "Should be black. Since lorem ipsum dolor sit amet, consectetur adipiscing elit."},
+						{Path: "colour.eyes", Comment: "Should be brown"},
+					})},
 				},
 			},
 		},
