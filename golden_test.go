@@ -581,3 +581,219 @@ func TestAssertJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestNotZeroTime(t *testing.T) {
+	type args struct {
+		path   string
+		layout string
+	}
+	type given struct {
+		args args
+		json string
+		t    *testing.T // should not be initialized in the test cases
+	}
+	type want struct {
+		failed bool // true if the test should fail, false if it should pass
+	}
+	type test struct {
+		name  string
+		given given
+		want  want
+	}
+	tests := []test{
+		{
+			name: "passes when the time is not zero",
+			given: given{
+				args: args{
+					path:   "data.user.updatedAt",
+					layout: time.RFC3339,
+				},
+				json: "testdata/not_zero_time/passes_when_time_not_zero.json",
+			},
+			want: want{failed: false},
+		},
+		{
+			name: "fails when the time is zero",
+			given: given{
+				args: args{
+					path:   "data.user.updatedAt",
+					layout: time.RFC3339,
+				},
+				json: "testdata/not_zero_time/fails_when_time_zero.json",
+			},
+			want: want{failed: true},
+		},
+		{
+			name: "fails when the path does not exist",
+			given: given{
+				args: args{
+					path:   "data.user.updatedAt",
+					layout: time.RFC3339,
+				},
+				json: "testdata/not_zero_time/fails_when_path_does_not_exist.json",
+			},
+			want: want{failed: true},
+		},
+		{
+			name: "fails when the value is not a string",
+			given: given{
+				args: args{
+					path:   "data.user.age",
+					layout: time.RFC3339,
+				},
+				json: "testdata/not_zero_time/fails_when_value_not_string.json",
+			},
+			want: want{failed: true},
+		},
+		{
+			name: "fails when the date format is incorrect",
+			given: given{
+				args: args{
+					path:   "data.user.updatedAt",
+					layout: "2006-01-02", // This is not a valid layout which causes the test to fail
+				},
+				json: "testdata/not_zero_time/passes_when_time_not_zero.json", // This test requires a valid JSON file with a path that exists. That's why we use the same file as the first test case.
+			},
+			want: want{failed: true},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			/* ---------------------------------- Given --------------------------------- */
+			require := require.New(t)
+			tt.given.t = &testing.T{} // test result recorder
+			fileBytes := readFile(t, tt.given.json)
+			g := &golden{result: fileBytes}
+
+			/* ---------------------------------- When ---------------------------------- */
+			NotZeroTime(tt.given.args.path, tt.given.args.layout)(tt.given.t, false, g, "")
+
+			/* ---------------------------------- Then ---------------------------------- */
+			// Assert the test result
+			require.Equal(tt.want.failed, tt.given.t.Failed())
+		})
+	}
+}
+
+func TestEqualTimes(t *testing.T) {
+	type args struct {
+		a      string
+		b      string
+		layout string
+	}
+	type given struct {
+		args args
+		json string
+		t    *testing.T // should not be initialized in the test cases
+	}
+	type want struct {
+		failed bool // true if the test should fail, false if it should pass
+	}
+	type test struct {
+		name  string
+		given given
+		want  want
+	}
+	tests := []test{
+		{
+			name: "passes when the times are equal",
+			given: given{
+				args: args{
+					a:      "data.user.createdAt",
+					b:      "data.user.updatedAt",
+					layout: time.RFC3339,
+				},
+				json: "testdata/equal_times/passes_when_times_equal.json",
+			},
+			want: want{failed: false},
+		},
+		{
+			name: "fails when the times are not equal",
+			given: given{
+				args: args{
+					a:      "data.user.createdAt",
+					b:      "data.user.updatedAt",
+					layout: time.RFC3339,
+				},
+				json: "testdata/equal_times/fails_when_times_not_equal.json",
+			},
+			want: want{failed: true},
+		},
+		{
+			name: "fails when the first path does not exist",
+			given: given{
+				args: args{
+					a:      "data.user.createdAt",
+					b:      "data.user.updatedAt",
+					layout: time.RFC3339,
+				},
+				json: "testdata/equal_times/fails_when_first_path_does_not_exist.json",
+			},
+			want: want{failed: true},
+		},
+		{
+			name: "fails when the second path does not exist",
+			given: given{
+				args: args{
+					a:      "data.user.createdAt",
+					b:      "data.user.updatedAt",
+					layout: time.RFC3339,
+				},
+				json: "testdata/equal_times/fails_when_second_path_does_not_exist.json",
+			},
+			want: want{failed: true},
+		},
+		{
+			name: "fails when the first value is not a string",
+			given: given{
+				args: args{
+					a:      "data.user.age",
+					b:      "data.user.updatedAt",
+					layout: time.RFC3339,
+				},
+				json: "testdata/equal_times/fails_when_first_value_not_string.json",
+			},
+			want: want{failed: true},
+		},
+		{
+			name: "fails when the second value is not a string",
+			given: given{
+				args: args{
+					a:      "data.user.createdAt",
+					b:      "data.user.age",
+					layout: time.RFC3339,
+				},
+				json: "testdata/equal_times/fails_when_second_value_not_string.json",
+			},
+			want: want{failed: true},
+		},
+		{
+			name: "fails when the date format is incorrect",
+			given: given{
+				args: args{
+					a:      "data.user.createdAt",
+					b:      "data.user.updatedAt",
+					layout: "2006-01-02", // This is not a valid layout which causes the test to fail
+				},
+				json: "testdata/equal_times/passes_when_times_equal.json", // This test requires a valid JSON file with paths that exist. That's why we use the same file as the first test case.
+			},
+			want: want{failed: true},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			/* ---------------------------------- Given --------------------------------- */
+			require := require.New(t)
+			tt.given.t = &testing.T{} // test result recorder
+			fileBytes := readFile(t, tt.given.json)
+			g := &golden{result: fileBytes}
+
+			/* ---------------------------------- When ---------------------------------- */
+			EqualTimes(tt.given.args.a, tt.given.args.b, tt.given.args.layout)(tt.given.t, false, g, "")
+
+			/* ---------------------------------- Then ---------------------------------- */
+			// Assert the test result
+			require.Equal(tt.want.failed, tt.given.t.Failed())
+		})
+	}
+}

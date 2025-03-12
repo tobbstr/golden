@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -280,6 +281,122 @@ func FileComment(comment string) Option {
 func UpdateGoldenFiles() Option {
 	return func(t *testing.T, failNow bool, g *golden, path string) {
 		writeGoldenFile(t, failNow, path, g.result)
+	}
+}
+
+// NotZeroTime checks if the time at the specified path is not zero.
+//
+// Parameters:
+//   - path: the GJSON path to the time. NO WILDCARDS SUPPORTED!!!
+//   - layout: the layout of the time. See https://golang.org/pkg/time/#pkg-constants
+//
+// IMPORTANT! This option must be used before SkipFields() and FieldComments() since they modify the golden file.
+//
+// Example: NotZeroTime("data.user.updatedAt", time.RFC3339)
+func NotZeroTime(path string, layout string) Option {
+	return func(t *testing.T, failNow bool, g *golden, _ string) {
+		res := gjson.GetBytes(g.result, path)
+		if !res.Exists() {
+			if failNow {
+				require.Fail(t, "path not found in JSON", "path = %s", path)
+			}
+			assert.Fail(t, "path not found in JSON", "path = %s", path)
+			return
+		}
+		if res.Type != gjson.String {
+			if failNow {
+				require.Fail(t, "path's value is not a string", "path = %s", path)
+			}
+			assert.Fail(t, "path's value is not a string", "path = %s", path)
+			return
+		}
+
+		tide, err := time.Parse(layout, res.String())
+		if err != nil {
+			if failNow {
+				require.Fail(t, "parsing time", "path = %s", path)
+			}
+			assert.Fail(t, "parsing time", "path = %s", path)
+			return
+		}
+
+		if tide.IsZero() {
+			if failNow {
+				require.Fail(t, "time is zero", "path = %s", path)
+			}
+			assert.Fail(t, "time is zero", "path = %s", path)
+		}
+	}
+}
+
+// EqualTimes checks if the times at the specified paths are equal.
+//
+// Parameters:
+//   - a: the GJSON path to the first time. NO WILDCARDS SUPPORTED!!!
+//   - b: the GJSON path to the second time. NO WILDCARDS SUPPORTED!!!
+//   - layout: the layout of the time values. See https://golang.org/pkg/time/#pkg-constants
+//
+// IMPORTANT! This option must be used before SkipFields() and FieldComments() since they modify the golden file.
+//
+// Example: EqualTimes("data.user.createdAt", "data.user.updatedAt", time.RFC3339)
+func EqualTimes(a, b, layout string) Option {
+	return func(t *testing.T, failNow bool, g *golden, _ string) {
+		aRes := gjson.GetBytes(g.result, a)
+		if !aRes.Exists() {
+			if failNow {
+				require.Fail(t, "a not found in JSON", "path = %s", a)
+			}
+			assert.Fail(t, "a not found in JSON", "path = %s", a)
+			return
+		}
+		if aRes.Type != gjson.String {
+			if failNow {
+				require.Fail(t, "a's value is not a string", "path = %s", a)
+			}
+			assert.Fail(t, "a's value is not a string", "path = %s", a)
+			return
+		}
+
+		aTide, err := time.Parse(layout, aRes.String())
+		if err != nil {
+			if failNow {
+				require.Fail(t, "parsing a's time", "path = %s", a)
+			}
+			assert.Fail(t, "parsing a's time", "path = %s", a)
+			return
+		}
+
+		bRes := gjson.GetBytes(g.result, b)
+		if !bRes.Exists() {
+			if failNow {
+				require.Fail(t, "b not found in JSON", "path = %s", b)
+			}
+			assert.Fail(t, "b not found in JSON", "path = %s", b)
+			return
+		}
+		if bRes.Type != gjson.String {
+			if failNow {
+				require.Fail(t, "b's value is not a string", "path = %s", b)
+			}
+			assert.Fail(t, "b's value is not a string", "path = %s", b)
+			return
+		}
+
+		bTide, err := time.Parse(layout, bRes.String())
+		if err != nil {
+			if failNow {
+				require.Fail(t, "parsing b's time", "path = %s", b)
+			}
+			assert.Fail(t, "parsing b's time", "path = %s", b)
+			return
+		}
+
+		if !aTide.Equal(bTide) {
+			if failNow {
+				require.Fail(t, "times are not equal", "a = %s, b = %s", aTide.String(), bTide.String())
+			}
+			assert.Fail(t, "times are not equal", "a = %s, b = %s", aTide.String(), bTide.String())
+		}
 	}
 }
 
