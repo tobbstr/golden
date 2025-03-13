@@ -147,7 +147,7 @@ func TestAssertJSON_Failure(t *testing.T) {
 					got: map[string]interface{}{
 						"name": "John",
 					},
-					options: []Option{FieldComments([]FieldComment{{Path: "age", Comment: "This is a file comment"}})},
+					options: []Option{WithFieldComments([]FieldComment{{Path: "age", Comment: "This is a file comment"}})},
 				},
 			},
 		},
@@ -159,7 +159,7 @@ func TestAssertJSON_Failure(t *testing.T) {
 					got: map[string]interface{}{
 						"name": "John",
 					},
-					options: []Option{SkipFields("age")},
+					options: []Option{WithSkippedFields("age")},
 				},
 			},
 		},
@@ -219,7 +219,7 @@ func TestAssertJSON(t *testing.T) {
 							"eyes": "brown",
 						},
 					},
-					options: []Option{SkipFields("colour.hair", "colour.eyes")},
+					options: []Option{WithSkippedFields("colour.hair", "colour.eyes")},
 				},
 			},
 		},
@@ -248,7 +248,7 @@ func TestAssertJSON(t *testing.T) {
 								Hair: hair{Colour: "brown"},
 							},
 						},
-						options: []Option{SkipFields("sibling.hair.colour")},
+						options: []Option{WithSkippedFields("sibling.hair.colour")},
 					}
 				}(),
 			},
@@ -279,7 +279,7 @@ func TestAssertJSON(t *testing.T) {
 								{Hair: hair{Colour: "brown"}},
 							},
 						},
-						options: []Option{SkipFields("siblings")},
+						options: []Option{WithSkippedFields("siblings")},
 					}
 				}(),
 			},
@@ -310,7 +310,7 @@ func TestAssertJSON(t *testing.T) {
 								{Hair: hair{Colour: "brown"}},
 							},
 						},
-						options: []Option{SkipFields("siblings.1.hair.colour")},
+						options: []Option{WithSkippedFields("siblings.1.hair.colour")},
 					}
 				}(),
 			},
@@ -341,7 +341,7 @@ func TestAssertJSON(t *testing.T) {
 								{Hair: hair{Colour: "brown"}},
 							},
 						},
-						options: []Option{SkipFields("siblings.1.hair.colour")},
+						options: []Option{WithSkippedFields("siblings.1.hair.colour")},
 					}
 				}(),
 			},
@@ -372,7 +372,7 @@ func TestAssertJSON(t *testing.T) {
 							Age:     30,
 							Sibling: nil,
 						},
-						options: []Option{SkipFields("sibling")},
+						options: []Option{WithSkippedFields("sibling")},
 					}
 				}(),
 			},
@@ -401,7 +401,7 @@ func TestAssertJSON(t *testing.T) {
 							Age:     30,
 							Sibling: &sibling{Hair: hair{Colour: "brown"}},
 						},
-						options: []Option{SkipFields("sibling")},
+						options: []Option{WithSkippedFields("sibling")},
 					}
 				}(),
 			},
@@ -430,7 +430,7 @@ func TestAssertJSON(t *testing.T) {
 							Age:     30,
 							Sibling: nil,
 						},
-						options: []Option{SkipFields(KeepNull("sibling"))},
+						options: []Option{WithSkippedFields(KeepNull("sibling"))},
 					}
 				}(),
 			},
@@ -459,7 +459,7 @@ func TestAssertJSON(t *testing.T) {
 							Age:     30,
 							Sibling: &sibling{Hair: hair{Colour: "brown"}},
 						},
-						options: []Option{SkipFields(KeepNull("sibling"))},
+						options: []Option{WithSkippedFields(KeepNull("sibling"))},
 					}
 				}(),
 			},
@@ -491,7 +491,7 @@ func TestAssertJSON(t *testing.T) {
 								{Hair: hair{Colour: "blonde"}, Born: time.Now()},
 							},
 						},
-						options: []Option{SkipFields("siblings.#.born")},
+						options: []Option{WithSkippedFields("siblings.#.born")},
 					}
 				}(),
 			},
@@ -525,7 +525,7 @@ func TestAssertJSON(t *testing.T) {
 								{Hair: hair{Colour: "blonde"}, Born: &now},
 							},
 						},
-						options: []Option{SkipFields(KeepNull("siblings.#.born"))},
+						options: []Option{WithSkippedFields(KeepNull("siblings.#.born"))},
 					}
 				}(),
 			},
@@ -543,7 +543,7 @@ func TestAssertJSON(t *testing.T) {
 							"eyes": "brown",
 						},
 					},
-					options: []Option{FieldComments([]FieldComment{
+					options: []Option{WithFieldComments([]FieldComment{
 						{Path: "colour.hair", Comment: "Should be black. Since lorem ipsum dolor sit amet, consectetur adipiscing elit."},
 						{Path: "colour.eyes", Comment: "Should be brown"},
 					})},
@@ -563,7 +563,7 @@ func TestAssertJSON(t *testing.T) {
 							"eyes": "brown",
 						},
 					},
-					options: []Option{FileComment("This is a file comment")},
+					options: []Option{WithFileComment("This is a file comment")},
 				},
 			},
 		},
@@ -582,7 +582,7 @@ func TestAssertJSON(t *testing.T) {
 	}
 }
 
-func TestNotZeroTime(t *testing.T) {
+func TestWithNotZeroTime(t *testing.T) {
 	type args struct {
 		path   string
 		layout string
@@ -666,7 +666,7 @@ func TestNotZeroTime(t *testing.T) {
 			g := &golden{result: fileBytes}
 
 			/* ---------------------------------- When ---------------------------------- */
-			NotZeroTime(tt.given.args.path, tt.given.args.layout)(tt.given.t, false, g, "")
+			WithNotZeroTime(tt.given.args.path, tt.given.args.layout)(tt.given.t, false, g, "")
 
 			/* ---------------------------------- Then ---------------------------------- */
 			// Assert the test result
@@ -675,7 +675,7 @@ func TestNotZeroTime(t *testing.T) {
 	}
 }
 
-func TestEqualTimes(t *testing.T) {
+func TestWithEqualTimes(t *testing.T) {
 	type args struct {
 		a      string
 		b      string
@@ -789,7 +789,7 @@ func TestEqualTimes(t *testing.T) {
 			g := &golden{result: fileBytes}
 
 			/* ---------------------------------- When ---------------------------------- */
-			EqualTimes(tt.given.args.a, tt.given.args.b, tt.given.args.layout)(tt.given.t, false, g, "")
+			WithEqualTimes(tt.given.args.a, tt.given.args.b, tt.given.args.layout)(tt.given.t, false, g, "")
 
 			/* ---------------------------------- Then ---------------------------------- */
 			// Assert the test result
