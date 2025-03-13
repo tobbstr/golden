@@ -97,7 +97,7 @@ This adds a field comment.
 ```go
 // NOTE! The file extension is .jsonc, since standard JSON does not support comments.
 want := "testdata/my_golden_file.jsonc"
-golden.AssertJSON(t, want, got, golden.FieldComments([]golden.FieldComment{
+golden.AssertJSON(t, want, got, golden.WithFieldComments([]golden.FieldComment{
     {Path:"data.users.0.age", Comment: "Should be 25"},
     // ... add more field comments here if needed ...
 }))
@@ -132,7 +132,7 @@ This adds a file comment.
 ```go
 // NOTE! The file extension is .jsonc, since standard JSON does not support comments.
 want := "testdata/my_golden_file.jsonc"
-golden.AssertJSON(t, want, got, golden.FileComment("This is my file comment"))
+golden.AssertJSON(t, want, got, golden.WithFileComment("This is my file comment"))
 ```
 
 And this is what the resulting golden file looks like:
@@ -167,7 +167,7 @@ achieve this, do the following.
 ```go
 // NOTE! The file extension is .jsonc, since standard JSON does not support comments.
 want := "testdata/my_golden_file.jsonc"
-golden.AssertJSON(t, want, got, golden.SkippedFields("data.users.#.age"))
+golden.AssertJSON(t, want, got, golden.WithSkippedFields("data.users.#.age"))
 ```
 
 And this is what the resulting golden file looks like:
@@ -219,7 +219,7 @@ ones. For John, we skip the `age` field, but for Eliana, we keep it.
 Using the `KeepNull` option:
 
 ```go
-golden.SkippedFields(
+golden.WithSkippedFields(
     golden.KeepNull("data.users.0.age"),
     golden.KeepNull("data.users.1.age"),
 )
