@@ -43,9 +43,9 @@ type golden struct {
 //   - path: the path to the golden file.
 type Option func(t *testing.T, failNow bool, g *golden, path string)
 
-// KeepNull overrides the SkipFields' default behaviour for a specific field. It is used when the caller wants to
+// KeepNull overrides WithSkippedFields() default behaviour for a specific field. It is used when the caller wants to
 // distinguish between a non-null value and a null value, which would otherwise be replaced with "--* SKIPPED *--".
-// With the SkipFields default behaviour the fields are always replaced with skipped, but in some cases it is
+// With WithSkippedFields() default behaviour the fields are always replaced with skipped, but in some cases it is
 // desirable to be able to distinguish whether a field had a null value or not, while not caring what the actual value
 // was. An example of this, is an optional field such as an updatedAt timestamp and the caller simply wants to know
 // whether it was set or not.
@@ -56,7 +56,7 @@ type Option func(t *testing.T, failNow bool, g *golden, path string)
 //
 // Example: homePhone field is of a nilable Go-type and has the JSON-value null
 //
-// Before calling SkipFields() the JSON is:
+// Before calling WithSkippedFields() the JSON is:
 //
 //	{
 //	    "data": {
@@ -66,7 +66,7 @@ type Option func(t *testing.T, failNow bool, g *golden, path string)
 //	    }
 //	}
 //
-// After calling SkipFields(KeepNull("data.user.homePhone")) the JSON is still the same since the value of homePhone was null:
+// After calling WithSkippedFields(KeepNull("data.user.homePhone")) the JSON is still the same since the value of homePhone was null:
 //
 //	{
 //	    "data": {
@@ -90,16 +90,16 @@ type Option func(t *testing.T, failNow bool, g *golden, path string)
 // to complex paths. As a result, the KeepNull option is only supported for individual fields.
 type KeepNull string
 
-// SkipFields replaces values of the fields with "--* SKIPPED *--".
+// WithSkippedFields replaces values of the fields with "--* SKIPPED *--".
 // The fields are specified by their GJSON path.
 // See https://github.com/tidwall/gjson/blob/master/SYNTAX.md
 //
-// It accepts either strings or KeepNulls. For strings the values are always replaced by "--* SKIPPED *--".
+// It accepts both strings and KeepNulls. For strings the values are always replaced by "--* SKIPPED *--".
 // For KeepNulls, see the KeepNull definition for details.
 //
 // Example: Replacing the value of the "Name" field with "--* SKIPPED *--"
 //
-// Before calling SkipFields("data.user.Name") the JSON is:
+// Before calling WithSkippedFields("data.user.Name") the JSON is:
 //
 //	{
 //	    "data": {
@@ -109,7 +109,7 @@ type KeepNull string
 //	    }
 //	}
 //
-// After calling SkipFields("data.user.Name") the JSON is:
+// After calling WithSkippedFields("data.user.Name") the JSON is:
 //
 //	{
 //	    "data": {
@@ -118,7 +118,7 @@ type KeepNull string
 //	        }
 //	    }
 //	}
-func SkipFields[T string | KeepNull](fields ...T) Option {
+func WithSkippedFields[T string | KeepNull](fields ...T) Option {
 	return func(t *testing.T, failNow bool, g *golden, _ string) {
 		for _, fld := range fields {
 			var path string
@@ -174,7 +174,7 @@ type FieldComment struct {
 	Comment string
 }
 
-// FieldComments adds comments to fields in the golden file. This is useful for making it easier for the reader to
+// WithFieldComments adds comments to fields in the golden file. This is useful for making it easier for the reader to
 // understand what to look for when inspecting the JSON field.
 //
 //	Example:
@@ -185,7 +185,7 @@ type FieldComment struct {
 // NOTE! Adding comments to JSON makes it invalid, since JSON does not support comments. To keep you IDE happy,
 // i.e., for it not to show errors, make the file extension .jsonc. To do that, make sure the "want" file argument
 // in the JSON() function call has the .jsonc extension.
-func FieldComments(fieldComments []FieldComment) Option {
+func WithFieldComments(fieldComments []FieldComment) Option {
 	return func(t *testing.T, failNow bool, g *golden, _ string) {
 		// Add the comments to the fields
 		var err error
@@ -260,12 +260,12 @@ func correctMisplacedCommas(input []byte) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-// FileComment adds a comment to the top of the golden file. This is useful for providing context to the reader.
+// WithFileComment adds a comment to the top of the golden file. This is useful for providing context to the reader.
 //
 // NOTE! Adding comments to JSON makes it invalid, since JSON does not support comments. To keep you IDE happy,
 // i.e., for it not to show errors, make the file extension .jsonc. To do that, make sure the "want" file argument
 // in the JSON() function call has the .jsonc extension.
-func FileComment(comment string) Option {
+func WithFileComment(comment string) Option {
 	return func(t *testing.T, _ bool, g *golden, _ string) {
 		g.result = append([]byte("/*\n"+comment+"\n*/\n\n"), g.result...)
 	}
@@ -284,16 +284,16 @@ func UpdateGoldenFiles() Option {
 	}
 }
 
-// NotZeroTime checks if the time at the specified path is not zero.
+// WithNotZeroTime checks if the time at the specified path is not zero.
 //
 // Parameters:
 //   - path: the GJSON path to the time. NO WILDCARDS SUPPORTED!!!
 //   - layout: the layout of the time. See https://golang.org/pkg/time/#pkg-constants
 //
-// IMPORTANT! This option must be used before SkipFields() and FieldComments() since they modify the golden file.
+// IMPORTANT! This option must be used before WithSkippedFields() and WithFieldComments() since they modify the golden file.
 //
-// Example: NotZeroTime("data.user.updatedAt", time.RFC3339)
-func NotZeroTime(path string, layout string) Option {
+// Example: WithNotZeroTime("data.user.updatedAt", time.RFC3339)
+func WithNotZeroTime(path string, layout string) Option {
 	return func(t *testing.T, failNow bool, g *golden, _ string) {
 		res := gjson.GetBytes(g.result, path)
 		if !res.Exists() {
@@ -329,17 +329,17 @@ func NotZeroTime(path string, layout string) Option {
 	}
 }
 
-// EqualTimes checks if the times at the specified paths are equal.
+// WithEqualTimes checks if the times at the specified paths are equal.
 //
 // Parameters:
 //   - a: the GJSON path to the first time. NO WILDCARDS SUPPORTED!!!
 //   - b: the GJSON path to the second time. NO WILDCARDS SUPPORTED!!!
 //   - layout: the layout of the time values. See https://golang.org/pkg/time/#pkg-constants
 //
-// IMPORTANT! This option must be used before SkipFields() and FieldComments() since they modify the golden file.
+// IMPORTANT! This option must be used before WithSkippedFields() and WithFieldComments() since they modify the golden file.
 //
-// Example: EqualTimes("data.user.createdAt", "data.user.updatedAt", time.RFC3339)
-func EqualTimes(a, b, layout string) Option {
+// Example: WithEqualTimes("data.user.createdAt", "data.user.updatedAt", time.RFC3339)
+func WithEqualTimes(a, b, layout string) Option {
 	return func(t *testing.T, failNow bool, g *golden, _ string) {
 		aRes := gjson.GetBytes(g.result, a)
 		if !aRes.Exists() {
