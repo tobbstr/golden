@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestAssertJSON_UpdateFlag(t *testing.T) {
@@ -564,6 +566,15 @@ func TestAssertJSON(t *testing.T) {
 						},
 					},
 					options: []Option{WithFileComment("This is a file comment")},
+				},
+			},
+		},
+		{
+			name: "marshals gRPC status error",
+			given: given{
+				args: args{
+					want: "testdata/assert_json/marshals_grpc_status_error.json",
+					got:  status.Error(codes.Aborted, "data race detected"),
 				},
 			},
 		},

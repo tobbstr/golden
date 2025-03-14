@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"google.golang.org/grpc/status"
 )
 
 // update is a flag that is used to update the golden test files. If the flag is set to true, the golden test files
@@ -427,6 +428,14 @@ func RequireJSON(t *testing.T, want string, got any, opts ...Option) {
 
 func compareJSON(t *testing.T, failNow bool, want string, got any, opts ...Option) {
 	t.Helper()
+
+	// Handle gRPC status errors by extracting their protobuf representation, as JSON marshaling skips unexported fields.
+	if err, ok := got.(error); ok {
+		if st, ok := status.FromError(err); ok {
+			got = st.Proto()
+		}
+	}
+
 	var gotBytes []byte
 	gotBytes, err := json.MarshalIndent(got, "", "    ")
 	if !failNow && !assert.NoError(t, err, "marshalling got") {
