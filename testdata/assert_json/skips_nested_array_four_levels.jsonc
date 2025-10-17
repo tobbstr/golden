@@ -1,0 +1,61 @@
+{
+    "name": "Conference Schedule",
+    "weeks": [
+        {
+            "days": [
+                {
+                    "sessions": [
+                        {
+                            "events": [
+                                {
+                                    "name": "Opening Keynote",
+                                    "timestamp": "--* SKIPPED *--"
+                                },
+                                {
+                                    "name": "Tech Talk 1",
+                                    "timestamp": "--* SKIPPED *--"
+                                }
+                            ]
+                        },
+                        {
+                            "events": [
+                                {
+                                    "name": "Workshop A",
+                                    "timestamp": "--* SKIPPED *--"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "sessions": [
+                        {
+                            "events": [
+                                {
+                                    "name": "Panel Discussion",
+                                    "timestamp": "--* SKIPPED *--"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "days": [
+                {
+                    "sessions": [
+                        {
+                            "events": [
+                                {
+                                    "name": "Closing Ceremony",
+                                    "timestamp": "--* SKIPPED *--"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

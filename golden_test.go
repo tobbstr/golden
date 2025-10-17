@@ -40,7 +40,7 @@ func TestAssertJSON_UpdateFlag(t *testing.T) {
 			given: given{
 				args: args{
 					want: "testdata/assert_json_update_flag/overwrites.json",
-					got:  map[string]interface{}{"name": "John", "age": 30},
+					got:  map[string]any{"name": "John", "age": 30},
 				},
 				update: true,
 			},
@@ -57,7 +57,7 @@ func TestAssertJSON_UpdateFlag(t *testing.T) {
 			given: given{
 				args: args{
 					want: "testdata/assert_json_update_flag/no-op.json",
-					got:  map[string]interface{}{"name": "John", "age": 30},
+					got:  map[string]any{"name": "John", "age": 30},
 				},
 				update: false,
 			},
@@ -130,10 +130,10 @@ func TestAssertJSON_Failure(t *testing.T) {
 			given: given{
 				args: args{
 					want: "testdata/assert_json_failure/json_different.json",
-					got: map[string]interface{}{
+					got: map[string]any{
 						"name": "John",
 						"age":  30,
-						"colour": map[string]interface{}{
+						"colour": map[string]any{
 							"hair": "black",
 							"eyes": "brown",
 						},
@@ -146,7 +146,7 @@ func TestAssertJSON_Failure(t *testing.T) {
 			given: given{
 				args: args{
 					want: "testdata/assert_json_failure/empty.json",
-					got: map[string]interface{}{
+					got: map[string]any{
 						"name": "John",
 					},
 					options: []Option{WithFieldComments([]FieldComment{{Path: "age", Comment: "This is a file comment"}})},
@@ -158,7 +158,7 @@ func TestAssertJSON_Failure(t *testing.T) {
 			given: given{
 				args: args{
 					want: "testdata/assert_json_failure/empty.json",
-					got: map[string]interface{}{
+					got: map[string]any{
 						"name": "John",
 					},
 					options: []Option{WithSkippedFields("age")},
@@ -204,7 +204,7 @@ func TestAssertJSON(t *testing.T) {
 			given: given{
 				args: args{
 					want: "testdata/assert_json/same_content.json",
-					got:  map[string]interface{}{"name": "John", "age": 30},
+					got:  map[string]any{"name": "John", "age": 30},
 				},
 			},
 		},
@@ -213,10 +213,10 @@ func TestAssertJSON(t *testing.T) {
 			given: given{
 				args: args{
 					want: "testdata/assert_json/skips_field_map.json",
-					got: map[string]interface{}{
+					got: map[string]any{
 						"name": "John",
 						"age":  30,
-						"colour": map[string]interface{}{
+						"colour": map[string]any{
 							"hair": "black",
 							"eyes": "brown",
 						},
@@ -537,10 +537,10 @@ func TestAssertJSON(t *testing.T) {
 			given: given{
 				args: args{
 					want: "testdata/assert_json/adds_field_comments.jsonc",
-					got: map[string]interface{}{
+					got: map[string]any{
 						"name": "John",
 						"age":  30,
-						"colour": map[string]interface{}{
+						"colour": map[string]any{
 							"hair": "black",
 							"eyes": "brown",
 						},
@@ -557,10 +557,10 @@ func TestAssertJSON(t *testing.T) {
 			given: given{
 				args: args{
 					want: "testdata/assert_json/adds_file_comment.jsonc",
-					got: map[string]interface{}{
+					got: map[string]any{
 						"name": "John",
 						"age":  30,
-						"colour": map[string]interface{}{
+						"colour": map[string]any{
 							"hair": "black",
 							"eyes": "brown",
 						},
@@ -578,6 +578,81 @@ func TestAssertJSON(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "skips fields four levels deep in nested arrays using # character",
+			given: given{
+				args: func() args {
+					type event struct {
+						Name      string    `json:"name"`
+						Timestamp time.Time `json:"timestamp"`
+					}
+					type session struct {
+						Events []event `json:"events"`
+					}
+					type day struct {
+						Sessions []session `json:"sessions"`
+					}
+					type week struct {
+						Days []day `json:"days"`
+					}
+					type root struct {
+						Name  string `json:"name"`
+						Weeks []week `json:"weeks"`
+					}
+
+					return args{
+						want: "testdata/assert_json/skips_nested_array_four_levels.jsonc",
+						got: root{
+							Name: "Conference Schedule",
+							Weeks: []week{
+								{
+									Days: []day{
+										{
+											Sessions: []session{
+												{
+													Events: []event{
+														{Name: "Opening Keynote", Timestamp: time.Now().Add(-3 * time.Hour)},
+														{Name: "Tech Talk 1", Timestamp: time.Now().Add(-2 * time.Hour)},
+													},
+												},
+												{
+													Events: []event{
+														{Name: "Workshop A", Timestamp: time.Now().Add(-1 * time.Hour)},
+													},
+												},
+											},
+										},
+										{
+											Sessions: []session{
+												{
+													Events: []event{
+														{Name: "Panel Discussion", Timestamp: time.Now()},
+													},
+												},
+											},
+										},
+									},
+								},
+								{
+									Days: []day{
+										{
+											Sessions: []session{
+												{
+													Events: []event{
+														{Name: "Closing Ceremony", Timestamp: time.Now().Add(1 * time.Hour)},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						options: []Option{WithSkippedFields("weeks.#.days.#.sessions.#.events.#.timestamp")},
+					}
+				}(),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -593,7 +668,7 @@ func TestAssertJSON(t *testing.T) {
 	}
 }
 
-func TestWithNotZeroTime(t *testing.T) {
+func TestCheckNotZeroTime(t *testing.T) {
 	type args struct {
 		path   string
 		layout string
@@ -616,10 +691,10 @@ func TestWithNotZeroTime(t *testing.T) {
 			name: "passes when the time is not zero",
 			given: given{
 				args: args{
-					path:   "data.user.updatedAt",
+					path:   "data.users.#.updatedAt",
 					layout: time.RFC3339,
 				},
-				json: "testdata/not_zero_time/passes_when_time_not_zero.json",
+				json: "testdata/check_not_zero_time/passes_when_time_not_zero.json",
 			},
 			want: want{failed: false},
 		},
@@ -630,7 +705,7 @@ func TestWithNotZeroTime(t *testing.T) {
 					path:   "data.user.updatedAt",
 					layout: time.RFC3339,
 				},
-				json: "testdata/not_zero_time/fails_when_time_zero.json",
+				json: "testdata/check_not_zero_time/fails_when_time_zero.json",
 			},
 			want: want{failed: true},
 		},
@@ -641,7 +716,7 @@ func TestWithNotZeroTime(t *testing.T) {
 					path:   "data.user.updatedAt",
 					layout: time.RFC3339,
 				},
-				json: "testdata/not_zero_time/fails_when_path_does_not_exist.json",
+				json: "testdata/check_not_zero_time/fails_when_path_does_not_exist.json",
 			},
 			want: want{failed: true},
 		},
@@ -652,7 +727,7 @@ func TestWithNotZeroTime(t *testing.T) {
 					path:   "data.user.age",
 					layout: time.RFC3339,
 				},
-				json: "testdata/not_zero_time/fails_when_value_not_string.json",
+				json: "testdata/check_not_zero_time/fails_when_value_not_string.json",
 			},
 			want: want{failed: true},
 		},
@@ -663,7 +738,7 @@ func TestWithNotZeroTime(t *testing.T) {
 					path:   "data.user.updatedAt",
 					layout: "2006-01-02", // This is not a valid layout which causes the test to fail
 				},
-				json: "testdata/not_zero_time/passes_when_time_not_zero.json", // This test requires a valid JSON file with a path that exists. That's why we use the same file as the first test case.
+				json: "testdata/check_not_zero_time/passes_when_time_not_zero.json", // This test requires a valid JSON file with a path that exists. That's why we use the same file as the first test case.
 			},
 			want: want{failed: true},
 		},
@@ -677,7 +752,7 @@ func TestWithNotZeroTime(t *testing.T) {
 			g := &golden{result: fileBytes}
 
 			/* ---------------------------------- When ---------------------------------- */
-			WithNotZeroTime(tt.given.args.path, tt.given.args.layout)(tt.given.t, false, g, "")
+			CheckNotZeroTime(tt.given.args.path, tt.given.args.layout).Apply(tt.given.t, false, g, "")
 
 			/* ---------------------------------- Then ---------------------------------- */
 			// Assert the test result
@@ -686,7 +761,7 @@ func TestWithNotZeroTime(t *testing.T) {
 	}
 }
 
-func TestWithEqualTimes(t *testing.T) {
+func TestCheckEqualTimes(t *testing.T) {
 	type args struct {
 		a      string
 		b      string
@@ -714,7 +789,7 @@ func TestWithEqualTimes(t *testing.T) {
 					b:      "data.user.updatedAt",
 					layout: time.RFC3339,
 				},
-				json: "testdata/equal_times/passes_when_times_equal.json",
+				json: "testdata/check_equal_times/passes_when_times_equal.json",
 			},
 			want: want{failed: false},
 		},
@@ -726,7 +801,7 @@ func TestWithEqualTimes(t *testing.T) {
 					b:      "data.user.updatedAt",
 					layout: time.RFC3339,
 				},
-				json: "testdata/equal_times/fails_when_times_not_equal.json",
+				json: "testdata/check_equal_times/fails_when_times_not_equal.json",
 			},
 			want: want{failed: true},
 		},
@@ -738,7 +813,7 @@ func TestWithEqualTimes(t *testing.T) {
 					b:      "data.user.updatedAt",
 					layout: time.RFC3339,
 				},
-				json: "testdata/equal_times/fails_when_first_path_does_not_exist.json",
+				json: "testdata/check_equal_times/fails_when_first_path_does_not_exist.json",
 			},
 			want: want{failed: true},
 		},
@@ -750,7 +825,7 @@ func TestWithEqualTimes(t *testing.T) {
 					b:      "data.user.updatedAt",
 					layout: time.RFC3339,
 				},
-				json: "testdata/equal_times/fails_when_second_path_does_not_exist.json",
+				json: "testdata/check_equal_times/fails_when_second_path_does_not_exist.json",
 			},
 			want: want{failed: true},
 		},
@@ -762,7 +837,7 @@ func TestWithEqualTimes(t *testing.T) {
 					b:      "data.user.updatedAt",
 					layout: time.RFC3339,
 				},
-				json: "testdata/equal_times/fails_when_first_value_not_string.json",
+				json: "testdata/check_equal_times/fails_when_first_value_not_string.json",
 			},
 			want: want{failed: true},
 		},
@@ -774,7 +849,7 @@ func TestWithEqualTimes(t *testing.T) {
 					b:      "data.user.age",
 					layout: time.RFC3339,
 				},
-				json: "testdata/equal_times/fails_when_second_value_not_string.json",
+				json: "testdata/check_equal_times/fails_when_second_value_not_string.json",
 			},
 			want: want{failed: true},
 		},
@@ -786,7 +861,7 @@ func TestWithEqualTimes(t *testing.T) {
 					b:      "data.user.updatedAt",
 					layout: "2006-01-02", // This is not a valid layout which causes the test to fail
 				},
-				json: "testdata/equal_times/passes_when_times_equal.json", // This test requires a valid JSON file with paths that exist. That's why we use the same file as the first test case.
+				json: "testdata/check_equal_times/passes_when_times_equal.json", // This test requires a valid JSON file with paths that exist. That's why we use the same file as the first test case.
 			},
 			want: want{failed: true},
 		},
@@ -800,9 +875,7 @@ func TestWithEqualTimes(t *testing.T) {
 			g := &golden{result: fileBytes}
 
 			/* ---------------------------------- When ---------------------------------- */
-			WithEqualTimes(tt.given.args.a, tt.given.args.b, tt.given.args.layout)(tt.given.t, false, g, "")
-
-			/* ---------------------------------- Then ---------------------------------- */
+			CheckEqualTimes(tt.given.args.a, tt.given.args.b, tt.given.args.layout).Apply(tt.given.t, false, g, "") /* ---------------------------------- Then ---------------------------------- */
 			// Assert the test result
 			require.Equal(tt.want.failed, tt.given.t.Failed())
 		})
